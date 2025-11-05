@@ -179,7 +179,7 @@
                 </Button.Style>
             </Button>
             <Button x:Name="CorregirButton" 
-                    Content="Corregir Filtros" 
+                    Content="Corregir" 
                     Width="150" Height="40" Margin="10,0" FontSize="14" FontWeight="SemiBold"
                     Background="#28A745" Foreground="White" BorderThickness="0" Cursor="Hand" 
                     Click="CorregirButton_Click">

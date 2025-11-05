@@ -165,7 +165,7 @@ namespace TL60_RevisionDeTablas.Services
                 item.Estado = EstadoParametro.Error;
                 item.Mensaje = "Error: No se encontró filtro de Assembly Code con valor que empiece con 'C.'.";
                 item.ValorActual = GetFiltersAsString(definition, filtrosActuales);
-                item.ValorCorregido = $"Assembly Code Equal {assemblyCode}";
+                item.ValorCorregido = $"Assembly Code Equal {assemblyCode}\nEMPRESA Equal RNG";
                 return item;
             }
 

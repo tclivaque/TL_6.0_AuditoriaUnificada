@@ -131,7 +131,7 @@ namespace TL60_RevisionDeTablas.UI
 
                 CorregirButton.IsEnabled = true;
                 CerrarButton.IsEnabled = true; // (MODIFICADO) Rehabilitar ambos botones
-                CorregirButton.Content = "Corregir Filtros";
+                CorregirButton.Content = "Corregir";
 
                 if (!writeResult.Exitoso)
                 {
@@ -148,7 +148,7 @@ namespace TL60_RevisionDeTablas.UI
                 MessageBox.Show($"Error fatal: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
                 CorregirButton.IsEnabled = true;
                 CerrarButton.IsEnabled = true; // (MODIFICADO) Rehabilitar ambos botones
-                CorregirButton.Content = "Corregir Filtros";
+                CorregirButton.Content = "Corregir";
             }
         }
 

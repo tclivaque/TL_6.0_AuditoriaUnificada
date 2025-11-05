@@ -19,9 +19,10 @@ namespace TL60_RevisionDeTablas.Models
         public string ValorActual { get; set; }
 
         /// <summary>
+        /// (¡¡AQUÍ ESTÁ LA CORRECCIÓN!!)
         /// Descripción del valor que se considera correcto.
         /// </summary>
-        public string ValorCorrecto { get; set; }
+        public string ValorCorregido { get; set; } // <-- ¡¡ESTA LÍNEA ARREGLA LOS 4 ERRORES!!
 
         /// <summary>
         /// El estado de esta auditoría.

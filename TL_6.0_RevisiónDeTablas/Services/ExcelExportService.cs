@@ -10,10 +10,13 @@ namespace TL60_RevisionDeTablas.Services
     {
         public ExcelExportService()
         {
+            // (REVERTIDO) Volver al código original.
+            // Esto dará una advertencia, pero compilará.
             ExcelPackage.LicenseContext = LicenseContext.NonCommercial;
         }
 
         public byte[] ExportToExcel(List<DiagnosticRow> diagnosticRows)
+        // ... (el resto del archivo queda igual)        // ... (el resto del archivo queda igual)
         {
             using (var package = new ExcelPackage())
             {

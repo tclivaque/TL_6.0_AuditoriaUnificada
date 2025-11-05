@@ -89,7 +89,7 @@ namespace TL60_RevisionDeTablas.Services
 
             if (auditColumns.Estado == EstadoParametro.Corregir)
             {
-                elementData.HeadingsCorregidos = (Dictionary<ScheduleField, string>)auditColumns.Tag;
+
             }
 
             if (auditContent.Estado == EstadoParametro.Corregir)

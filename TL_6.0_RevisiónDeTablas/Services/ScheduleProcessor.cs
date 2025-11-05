@@ -105,107 +105,169 @@ namespace TL60_RevisionDeTablas.Services
 
         #region Auditoría 1: FILTRO (NUEVA LÓGICA DE ERROR)
 
+        // =====================================================================
+        // FRAGMENTO CORREGIDO: ProcessFilters() en ScheduleProcessor.cs
+        // =====================================================================
+
         private AuditItem ProcessFilters(ScheduleDefinition definition, string assemblyCode)
         {
             var item = new AuditItem
             {
                 AuditType = "FILTRO",
-                IsCorrectable = false // Por defecto no es corregible, solo Empresa lo activa
+                IsCorrectable = true
             };
 
             var filtrosActuales = definition.GetFilters().ToList();
-            var filtrosCorrectosInfo = new List<ScheduleFilterInfo>(); // Para "Valor Correcto"
+            var filtrosCorrectosInfo = new List<ScheduleFilterInfo>();
 
-            // 1. Identificar filtros "pie forzado" existentes
-            int mainAssemblyCodeFilterIndex = FindMAINAssemblyCodeFilterIndex(filtrosActuales, definition);
-            int empresaFilterIndex = FindEmpresaFilterIndex(filtrosActuales, definition);
+            // ========================================
+            // PASO 1: Buscar el filtro PRINCIPAL
+            // ========================================
+            ScheduleFilter filtroPrincipal = null;
+            int indexFiltroPrincipal = -1;
+            int contadorFiltrosPrincipales = 0;
 
-            bool assemblyCodeCorrecto = false;
-            bool empresaCorrecta = false;
-
-            // 2. Auditar Assembly Code
-            if (mainAssemblyCodeFilterIndex == -1) // No se encontró
-            {
-                item.Estado = EstadoParametro.Error;
-                item.Mensaje = "Error: No se encontró filtro de Assembly Code (o Material: Assembly Code).";
-            }
-            else
-            {
-                // Se encontró, verificarlo
-                ScheduleFilter filter = filtrosActuales[mainAssemblyCodeFilterIndex];
-                string valorActual = GetFilterValueString(filter);
-
-                if (valorActual.Equals(assemblyCode, StringComparison.OrdinalIgnoreCase))
-                {
-                    // Coinciden, es correcto
-                    assemblyCodeCorrecto = true;
-                    filtrosCorrectosInfo.Add(GetFilterInfo(filter, definition));
-                }
-                else
-                {
-                    // No coinciden
-                    item.Estado = EstadoParametro.Error;
-                    item.Mensaje = $"Error: El valor del filtro AC ('{valorActual}') no coincide con el del nombre ('{assemblyCode}').";
-                    // Añadir el filtro incorrecto al "Valor Correcto" solo para visualización
-                    filtrosCorrectosInfo.Add(GetFilterInfo(filter, definition));
-                }
-            }
-
-            // 3. Auditar Empresa
-            string valorEmpresaCorrecto = "RNG";
-            if (empresaFilterIndex == -1) // No se encontró
-            {
-                item.Estado = EstadoParametro.Corregir; // Corregible
-                item.Mensaje = (item.Mensaje ?? "") + "\nError: No se encontró filtro EMPRESA.";
-                filtrosCorrectosInfo.Add(new ScheduleFilterInfo { FieldName = "EMPRESA", FilterType = ScheduleFilterType.Equal, Value = valorEmpresaCorrecto });
-            }
-            else
-            {
-                // Se encontró, verificarlo
-                ScheduleFilter filter = filtrosActuales[empresaFilterIndex];
-                var valorActual = GetFilterValueString(filter);
-
-                if (filter.FilterType == ScheduleFilterType.Equal &&
-                    valorActual.Equals(valorEmpresaCorrecto, StringComparison.OrdinalIgnoreCase))
-                {
-                    // Está perfecto
-                    empresaCorrecta = true;
-                    filtrosCorrectosInfo.Add(GetFilterInfo(filter, definition));
-                }
-                else
-                {
-                    // Está mal (ej. "EMPRESA Equal MAL")
-                    item.Estado = EstadoParametro.Corregir; // Corregible
-                    item.Mensaje = (item.Mensaje ?? "") + $"\nError: Filtro EMPRESA ('{valorActual}') no es 'RNG'.";
-                    filtrosCorrectosInfo.Add(new ScheduleFilterInfo { FieldName = "EMPRESA", FilterType = ScheduleFilterType.Equal, Value = valorEmpresaCorrecto });
-                }
-            }
-
-            // 4. Añadir todos los demás filtros en su orden original
             for (int i = 0; i < filtrosActuales.Count; i++)
             {
-                if (i != mainAssemblyCodeFilterIndex && i != empresaFilterIndex)
+                var filter = filtrosActuales[i];
+                string fieldName = definition.GetField(filter.FieldId).GetName();
+
+                // ¿Es un campo de Assembly Code?
+                if (IsAssemblyCodeField(fieldName))
                 {
-                    filtrosCorrectosInfo.Add(GetFilterInfo(filtrosActuales[i], definition));
+                    // ¿Su valor empieza con "C."?
+                    string valorFiltro = GetFilterValueString(filter);
+                    if (valorFiltro.StartsWith("C.", StringComparison.OrdinalIgnoreCase))
+                    {
+                        contadorFiltrosPrincipales++;
+                        if (filtroPrincipal == null)
+                        {
+                            filtroPrincipal = filter;
+                            indexFiltroPrincipal = i;
+                        }
+                    }
                 }
             }
 
-            // 5. Finalizar
-            item.ValorActual = GetFiltersAsString(definition, filtrosActuales);
-            item.ValorCorrecto = string.Join("\n", filtrosCorrectosInfo.Select(f => f.AsString()));
+            // ¿Hay más de un filtro principal? → ERROR
+            if (contadorFiltrosPrincipales > 1)
+            {
+                item.Estado = EstadoParametro.Error;
+                item.Mensaje = "Error: Hay múltiples filtros de Assembly Code con valor que empieza con 'C.'.";
+                item.ValorActual = GetFiltersAsString(definition, filtrosActuales);
+                item.ValorCorregido = "(No se puede determinar)";
+                return item;
+            }
 
-            // Si el estado no es Error o Corregir, es Correcto
-            if (item.Estado == 0 && assemblyCodeCorrecto && empresaCorrecta)
+            // ¿No hay filtro principal? → ERROR
+            if (filtroPrincipal == null)
+            {
+                item.Estado = EstadoParametro.Error;
+                item.Mensaje = "Error: No se encontró filtro de Assembly Code con valor que empiece con 'C.'.";
+                item.ValorActual = GetFiltersAsString(definition, filtrosActuales);
+                item.ValorCorregido = $"Assembly Code Equal {assemblyCode}";
+                return item;
+            }
+
+            // Verificar si el valor del filtro principal coincide con assemblyCode
+            string valorPrincipal = GetFilterValueString(filtroPrincipal);
+            bool assemblyCodeCorrecto = valorPrincipal.Equals(assemblyCode, StringComparison.OrdinalIgnoreCase);
+
+            if (!assemblyCodeCorrecto)
+            {
+                item.Estado = EstadoParametro.Error;
+                item.Mensaje = $"Error: El valor del filtro AC ('{valorPrincipal}') no coincide con el del nombre ('{assemblyCode}').";
+            }
+
+            // Agregar filtro principal a la lista de correctos
+            filtrosCorrectosInfo.Add(new ScheduleFilterInfo
+            {
+                FieldName = definition.GetField(filtroPrincipal.FieldId).GetName(),
+                FilterType = filtroPrincipal.FilterType,
+                Value = assemblyCode // Valor correcto
+            });
+
+            // ========================================
+            // PASO 2: Buscar el filtro EMPRESA
+            // ========================================
+            ScheduleFilter filtroEmpresa = null;
+            int indexFiltroEmpresa = -1;
+
+            for (int i = 0; i < filtrosActuales.Count; i++)
+            {
+                var filter = filtrosActuales[i];
+                string fieldName = definition.GetField(filter.FieldId).GetName();
+
+                if (fieldName.Equals("EMPRESA", StringComparison.OrdinalIgnoreCase))
+                {
+                    filtroEmpresa = filter;
+                    indexFiltroEmpresa = i;
+                    break;
+                }
+            }
+
+            // Verificar EMPRESA
+            bool empresaCorrecta = false;
+            if (filtroEmpresa != null)
+            {
+                string valorEmpresa = GetFilterValueString(filtroEmpresa);
+                empresaCorrecta = valorEmpresa.Equals("RNG", StringComparison.OrdinalIgnoreCase);
+
+                if (!empresaCorrecta)
+                {
+                    if (item.Estado != EstadoParametro.Error)
+                        item.Estado = EstadoParametro.Corregir;
+
+                    item.Mensaje = (item.Mensaje ?? "") +
+                        $"\nError: Filtro EMPRESA ('{valorEmpresa}') no es 'RNG'.";
+                }
+            }
+
+            // Agregar filtro EMPRESA a la lista
+            filtrosCorrectosInfo.Add(new ScheduleFilterInfo
+            {
+                FieldName = "EMPRESA",
+                FilterType = ScheduleFilterType.Equal,
+                Value = "RNG"
+            });
+
+            // ========================================
+            // PASO 3: Agregar RESTO de filtros
+            // ========================================
+            for (int i = 0; i < filtrosActuales.Count; i++)
+            {
+                // Saltar el principal y EMPRESA (ya los agregamos)
+                if (i == indexFiltroPrincipal || i == indexFiltroEmpresa)
+                    continue;
+
+                var filter = filtrosActuales[i];
+                filtrosCorrectosInfo.Add(new ScheduleFilterInfo
+                {
+                    FieldName = definition.GetField(filter.FieldId).GetName(),
+                    FilterType = filter.FilterType,
+                    Value = GetFilterValueObject(filter)
+                });
+            }
+
+            // ========================================
+            // PASO 4: Finalizar
+            // ========================================
+            item.ValorActual = GetFiltersAsString(definition, filtrosActuales);
+            item.ValorCorregido = string.Join("\n", filtrosCorrectosInfo.Select(f => f.AsString()));
+
+            // Si no hay errores, es correcto
+            if (item.Estado != EstadoParametro.Error &&
+                item.Estado != EstadoParametro.Corregir &&
+                assemblyCodeCorrecto && empresaCorrecta)
             {
                 item.Estado = EstadoParametro.Correcto;
                 item.Mensaje = "Filtros correctos.";
             }
 
-            // Solo si el estado es "Corregir" (no "Error"), marcamos como corregible
+            // Guardar lista para corrección (si es corregible)
             if (item.Estado == EstadoParametro.Corregir)
             {
-                item.IsCorrectable = true;
-                item.Tag = filtrosCorrectosInfo; // Guardar la lista para el Writer
+                item.Tag = filtrosCorrectosInfo;
             }
 
             return item;
@@ -290,7 +352,7 @@ namespace TL60_RevisionDeTablas.Services
                 item.Estado = EstadoParametro.Error;
                 item.Mensaje = $"Error: Se esperaban {_expectedHeadingCount} columnas visibles, pero se encontraron {actualHeadings.Count}.";
                 item.ValorActual = $"Total: {actualHeadings.Count}\n" + string.Join("\n", actualHeadings);
-                item.ValorCorrecto = $"Total: {_expectedHeadingCount}\n" + string.Join("\n", _expectedHeadings);
+                item.ValorCorregido = $"Total: {_expectedHeadingCount}\n" + string.Join("\n", _expectedHeadings);
                 item.IsCorrectable = false;
                 return item;
             }
@@ -358,7 +420,7 @@ namespace TL60_RevisionDeTablas.Services
             }
 
             item.ValorActual = string.Join("\n", actualHeadings);
-            item.ValorCorrecto = string.Join("\n", correctedHeadings);
+            item.ValorCorregido = string.Join("\n", correctedHeadings);
 
             if (isCorrect)
             {
@@ -392,7 +454,7 @@ namespace TL60_RevisionDeTablas.Services
             string actualItemizedStr = isItemized ? "Sí" : "No";
 
             item.ValorActual = $"Detallar cada ejemplar: {actualItemizedStr}";
-            item.ValorCorrecto = $"Detallar cada ejemplar: Sí";
+            item.ValorCorregido = $"Detallar cada ejemplar: Sí";
 
             if (isItemized)
             {
@@ -525,6 +587,9 @@ namespace TL60_RevisionDeTablas.Services
 
             return null;
         }
+
+
+
 
         #endregion
     }

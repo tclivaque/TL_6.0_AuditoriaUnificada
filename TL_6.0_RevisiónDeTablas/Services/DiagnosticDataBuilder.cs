@@ -9,9 +9,6 @@ using TL60_RevisionDeTablas.Models;
 
 namespace TL60_RevisionDeTablas.Services
 {
-    /// <summary>
-    /// Construye las filas de diagnóstico para mostrar en la ventana
-    /// </summary>
     public class DiagnosticDataBuilder
     {
         public List<DiagnosticRow> BuildDiagnosticRows(List<ElementData> elementosData)
@@ -23,9 +20,6 @@ namespace TL60_RevisionDeTablas.Services
                 if (elementData.Element == null) continue;
 
                 string idMostrar = elementData.ElementId?.IntegerValue.ToString() ?? "N/A";
-
-                // ===== CORRECCIÓN #2: Implementar lógica de EsSeleccionable =====
-                // Las tablas (ViewSchedule) SON seleccionables (tienen ElementId válido)
                 bool esSeleccionable = (elementData.ElementId != null && elementData.ElementId != ElementId.InvalidElementId);
 
                 // Procesar cada resultado de auditoría
@@ -38,12 +32,12 @@ namespace TL60_RevisionDeTablas.Services
                         Grupo = elementData.Categoria,
                         CodigoIdentificacion = elementData.CodigoIdentificacion,
                         Descripcion = elementData.Nombre,
-                        NombreParametro = auditResult.AuditType,
+                        NombreParametro = auditResult.AuditType, // "FILTRO", "COLUMNAS", "CONTENIDO", "CLASIFICACIÓN"
                         ValorActual = auditResult.ValorActual,
-                        ValorCorregido = auditResult.ValorCorrecto,
+                        ValorCorregido = auditResult.ValorCorregido,
                         Estado = auditResult.Estado,
                         Mensaje = auditResult.Mensaje,
-                        EsSeleccionable = esSeleccionable // ← CRÍTICO: Habilita el botón 👁️
+                        EsSeleccionable = esSeleccionable
                     };
 
                     rows.Add(row);
@@ -61,15 +55,11 @@ namespace TL60_RevisionDeTablas.Services
                 rows[i].NumeroFila = i + 1;
             }
 
-            // ===== CORRECCIÓN #3: Aplicar colores alternos por ID =====
             ApplyAlternatingColorsByID(rows);
 
             return rows;
         }
 
-        /// <summary>
-        /// Aplica colores alternos agrupados por ElementId (copiado de COBie)
-        /// </summary>
         private void ApplyAlternatingColorsByID(List<DiagnosticRow> rows)
         {
             string currentID = null;
@@ -77,30 +67,23 @@ namespace TL60_RevisionDeTablas.Services
 
             foreach (var row in rows)
             {
-                // Cambiar color cuando cambia el ID
                 if (row.IdMostrar != currentID)
                 {
                     currentID = row.IdMostrar;
                     useAlternateColor = !useAlternateColor;
                 }
 
-                // Obtener color base según el estado
                 MediaColor baseColor = GetBaseColorForEstado(row.Estado);
 
-                // Oscurecer si es fila alternada
                 if (useAlternateColor)
                 {
                     baseColor = DarkenColor(baseColor, 15);
                 }
 
-                // Asignar color
                 row.BackgroundColor = new MediaBrush(baseColor);
             }
         }
 
-        /// <summary>
-        /// Obtiene el color base según el estado del parámetro
-        /// </summary>
         private MediaColor GetBaseColorForEstado(EstadoParametro estado)
         {
             switch (estado)
@@ -118,9 +101,6 @@ namespace TL60_RevisionDeTablas.Services
             }
         }
 
-        /// <summary>
-        /// Oscurece un color para crear el efecto alternado
-        /// </summary>
         private MediaColor DarkenColor(MediaColor color, byte amount)
         {
             byte r = (byte)Math.Max(0, color.R - amount);
@@ -129,9 +109,6 @@ namespace TL60_RevisionDeTablas.Services
             return MediaColor.FromRgb(r, g, b);
         }
 
-        /// <summary>
-        /// Orden de prioridad para estados (para ordenamiento)
-        /// </summary>
         private int GetEstadoOrder(EstadoParametro estado)
         {
             switch (estado)

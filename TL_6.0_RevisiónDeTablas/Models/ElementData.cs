@@ -17,37 +17,26 @@ namespace TL60_RevisionDeTablas.Models
         public string CodigoIdentificacion { get; set; }
 
         /// <summary>
-        /// Se establece en True solo si TODAS las auditorías (Filtro, Contenido, Columnas) son correctas.
+        /// Se establece en True solo si TODAS las auditorías (Filtro, Contenido, etc.) son correctas.
         /// </summary>
         public bool DatosCompletos { get; set; }
 
         /// <summary>
-        /// (NUEVO) Almacena la lista de todos los resultados de la auditoría (Filtro, Contenido, etc.)
+        /// Almacena la lista de todos los resultados de la auditoría 
+        /// (ej. "FILTRO", "COLUMNAS", "RENOMBRAR")
         /// </summary>
         public List<AuditItem> AuditResults { get; set; }
 
-        /// <summary>
-        /// Almacena la lista de filtros que se deben ESCRIBIR
-        /// (solo se rellena si la auditoría de filtros falla)
-        /// </summary>
-        public List<ScheduleFilterInfo> FiltrosCorrectos { get; set; }
+        // --- PROPIEDADES ANTIGUAS ELIMINADAS ---
+        // 'FiltrosCorrectos' ahora está en AuditItem.Tag
+        // 'HeadingsCorregidos' ahora está en AuditItem.Tag
+        // 'IsItemizedCorrect' ahora está en AuditItem.Tag
 
-        /// <summary>
-        /// Almacena el estado del check "Itemize"
-        /// (solo se usa si la auditoría de contenido falla)
-        /// </summary>
-        public bool IsItemizedCorrect { get; set; }
 
-        /// <summary>
-        /// Almacena el trabajo de corrección de encabezados (Campo/Valor Correcto)
-        /// </summary>
-        public Dictionary<ScheduleField, string> HeadingsCorregidos { get; set; }
         public ElementData()
         {
             AuditResults = new List<AuditItem>();
-            FiltrosCorrectos = new List<ScheduleFilterInfo>();
             DatosCompletos = false;
-            IsItemizedCorrect = true; // Asumir correcto hasta que se demuestre lo contrario
         }
     }
 }

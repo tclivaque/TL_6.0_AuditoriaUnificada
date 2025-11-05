@@ -107,6 +107,7 @@
     <Compile Include="Models\DiagnosticRow.cs" />
     <Compile Include="Models\ElementData.cs" />
     <Compile Include="Models\ProcessingResult.cs" />
+    <Compile Include="Models\RenamingJobData.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Models\ScheduleFilterInfo.cs" />
     <Compile Include="Services\DiagnosticDataBuilder.cs" />

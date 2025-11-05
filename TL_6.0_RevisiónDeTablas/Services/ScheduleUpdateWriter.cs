@@ -8,7 +8,7 @@ using TL60_RevisionDeTablas.Models;
 namespace TL60_RevisionDeTablas.Services
 {
     /// <summary>
-    /// Escribe las correcciones (Filtros, Contenido, Columnas) en las tablas
+    /// Escribe TODAS las correcciones (Filtros, Contenido, Columnas, Renombrado)
     /// </summary>
     public class ScheduleUpdateWriter
     {
@@ -25,7 +25,8 @@ namespace TL60_RevisionDeTablas.Services
             int tablasCorregidas = 0;
             int filtrosCorregidos = 0;
             int contenidosCorregidos = 0;
-            int columnasCorregidas = 0; // (NUEVO) Contador
+            int columnasCorregidas = 0;
+            int tablasRenombradas = 0; // (NUEVO)
 
             using (Transaction trans = new Transaction(_doc, "Corregir Auditoría de Tablas"))
             {
@@ -44,11 +45,12 @@ namespace TL60_RevisionDeTablas.Services
                         ScheduleDefinition definition = view.Definition;
                         bool tablaModificada = false;
 
-                        // --- 1. Corregir FILTROS ---
-                        var filterAudit = elementData.AuditResults.FirstOrDefault(a => a.AuditType == "FILTRO");
-                        if (filterAudit != null && filterAudit.Estado == EstadoParametro.Corregir)
+                        // --- 1. Corregir FILTROS (Solo si es corregible) ---
+                        var filterAudit = elementData.AuditResults.FirstOrDefault(a => a.AuditType == "FILTRO" && a.IsCorrectable);
+                        if (filterAudit != null)
                         {
-                            if (WriteFilters(definition, elementData.FiltrosCorrectos, result.Errores, elementData.Nombre))
+                            var filtrosACorregir = filterAudit.Tag as List<ScheduleFilterInfo>;
+                            if (filtrosACorregir != null && WriteFilters(definition, filtrosACorregir, result.Errores, elementData.Nombre))
                             {
                                 filtrosCorregidos++;
                                 tablaModificada = true;
@@ -56,8 +58,8 @@ namespace TL60_RevisionDeTablas.Services
                         }
 
                         // --- 2. Corregir CONTENIDO (Itemize) ---
-                        var contentAudit = elementData.AuditResults.FirstOrDefault(a => a.AuditType == "CONTENIDO");
-                        if (contentAudit != null && contentAudit.Estado == EstadoParametro.Corregir)
+                        var contentAudit = elementData.AuditResults.FirstOrDefault(a => a.AuditType == "CONTENIDO" && a.IsCorrectable);
+                        if (contentAudit != null)
                         {
                             if (!definition.IsItemized)
                             {
@@ -67,16 +69,28 @@ namespace TL60_RevisionDeTablas.Services
                             }
                         }
 
-                        // ==========================================================
-                        // ===== CORRECCIÓN #2: Añadida lógica de Escritor de Columnas =====
-                        // ==========================================================
-                        var columnAudit = elementData.AuditResults.FirstOrDefault(a => a.AuditType == "COLUMNAS");
-                        if (columnAudit != null && columnAudit.Estado == EstadoParametro.Corregir)
+                        // --- 3. Corregir COLUMNAS (Encabezados) ---
+                        var columnAudit = elementData.AuditResults.FirstOrDefault(a => a.AuditType == "COLUMNAS" && a.IsCorrectable);
+                        if (columnAudit != null)
                         {
                             var headingsToFix = columnAudit.Tag as Dictionary<ScheduleField, string>;
                             if (headingsToFix != null && WriteHeadings(headingsToFix, result.Errores, elementData.Nombre))
                             {
                                 columnasCorregidas += headingsToFix.Count;
+                                tablaModificada = true;
+                            }
+                        }
+
+                        // ==========================================================
+                        // ===== (NUEVO) 4. Ejecutar RENOMBRADO DE TABLA =====
+                        // ==========================================================
+                        var renameAudit = elementData.AuditResults.FirstOrDefault(a => a.AuditType == "CLASIFICACIÓN" && a.IsCorrectable);
+                        if (renameAudit != null)
+                        {
+                            var jobData = renameAudit.Tag as RenamingJobData;
+                            if (jobData != null && RenameAndReclassify(view, jobData, result.Errores))
+                            {
+                                tablasRenombradas++;
                                 tablaModificada = true;
                             }
                         }
@@ -91,10 +105,12 @@ namespace TL60_RevisionDeTablas.Services
                     trans.Commit();
                     result.Exitoso = true;
                     result.Mensaje = $"Corrección completa.\n" +
-                                     $"Tablas modificadas: {tablasCorregidas}\n" +
-                                     $"Correcciones de Filtros: {filtrosCorregidos}\n" +
-                                     $"Correcciones de Contenido: {contenidosCorregidos}\n" +
-                                     $"Correcciones de Columnas: {columnasCorregidas}"; // (NUEVO)
+                                     $"Tablas auditadas modificadas: {tablasCorregidas - tablasRenombradas}\n" +
+                                     $"Tablas de soporte reclasificadas: {tablasRenombradas}\n\n" +
+                                     $"Detalles:\n" +
+                                     $"Filtros corregidos: {filtrosCorregidos}\n" +
+                                     $"Contenidos corregidos: {contenidosCorregidos}\n" +
+                                     $"Encabezados corregidos: {columnasCorregidas}";
                 }
                 catch (Exception ex)
                 {
@@ -108,8 +124,38 @@ namespace TL60_RevisionDeTablas.Services
         }
 
         /// <summary>
-        /// (NUEVO) Escribe los encabezados de columna corregidos
+        /// (NUEVO) Renombra la tabla y actualiza sus parámetros de clasificación
         /// </summary>
+        private bool RenameAndReclassify(ViewSchedule view, RenamingJobData jobData, List<string> errores)
+        {
+            try
+            {
+                // 1. Renombrar la vista
+                view.Name = jobData.NuevoNombre;
+
+                // 2. Establecer GRUPO DE VISTA
+                Parameter paramGrupo = view.LookupParameter("GRUPO DE VISTA");
+                if (paramGrupo != null && !paramGrupo.IsReadOnly)
+                {
+                    paramGrupo.Set(jobData.NuevoGrupoVista);
+                }
+
+                // 3. Establecer SUBGRUPO DE VISTA
+                Parameter paramSubGrupo = view.LookupParameter("SUBGRUPO DE VISTA");
+                if (paramSubGrupo != null && !paramSubGrupo.IsReadOnly)
+                {
+                    paramSubGrupo.Set(jobData.NuevoSubGrupoVista);
+                }
+
+                return true;
+            }
+            catch (Exception ex)
+            {
+                errores.Add($"Error al reclasificar tabla '{view.Name}': {ex.Message}");
+                return false;
+            }
+        }
+
         private bool WriteHeadings(Dictionary<ScheduleField, string> headingsToFix, List<string> errores, string nombreTabla)
         {
             try
@@ -119,7 +165,6 @@ namespace TL60_RevisionDeTablas.Services
                     ScheduleField field = kvp.Key;
                     string correctedHeading = kvp.Value;
 
-                    // Validar que el campo aún sea válido antes de escribir
                     if (field != null && field.IsValidObject && field.ColumnHeading != correctedHeading)
                     {
                         field.ColumnHeading = correctedHeading;
@@ -145,7 +190,8 @@ namespace TL60_RevisionDeTablas.Services
                     ScheduleField field = FindField(definition, filtroInfo.FieldName);
                     if (field == null)
                     {
-                        errores.Add($"Tabla '{nombreTabla}' no tiene el campo '{filtroInfo.FieldName}' para filtrar.");
+                        // Si el campo no existe (ej. falta "EMPRESA"), no podemos añadir el filtro.
+                        // El procesador ya lo marcó como Error/Corregir, así que aquí solo lo ignoramos.
                         continue;
                     }
 
@@ -194,14 +240,29 @@ namespace TL60_RevisionDeTablas.Services
 
         private ScheduleField FindField(ScheduleDefinition definition, string fieldName)
         {
+            // (NUEVO) Búsqueda robusta que ignora prefijos
             for (int i = 0; i < definition.GetFieldCount(); i++)
             {
                 var field = definition.GetField(i);
-                if (field.GetName().Equals(fieldName, StringComparison.OrdinalIgnoreCase))
+                var name = field.GetName();
+                if (name.Equals(fieldName, StringComparison.OrdinalIgnoreCase) ||
+                    name.EndsWith($": {fieldName}", StringComparison.OrdinalIgnoreCase))
                 {
                     return field;
                 }
             }
+
+            // Fallback para campos sin prefijo (ej. "EMPRESA" si se añade nuevo)
+            for (int i = 0; i < definition.GetFieldCount(); i++)
+            {
+                var field = definition.GetField(i);
+                var name = field.GetName();
+                if (name.Equals(fieldName, StringComparison.OrdinalIgnoreCase))
+                {
+                    return field;
+                }
+            }
+
             return null;
         }
     }

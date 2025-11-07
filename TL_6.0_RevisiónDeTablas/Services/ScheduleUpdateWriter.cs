@@ -19,7 +19,7 @@ namespace TL60_RevisionDeTablas.Services
         public ProcessingResult UpdateSchedules(List<ElementData> elementosData)
         {
             var result = new ProcessingResult { Exitoso = false };
-            int tablasModificadas = 0;
+            int tablasCorregidas = 0;
             int filtrosCorregidos = 0;
             int contenidosCorregidos = 0;
             int tablasReclasificadas = 0;
@@ -69,7 +69,7 @@ namespace TL60_RevisionDeTablas.Services
                         // ==========================================================
                         // ===== 2. Ejecutar RENOMBRADO DE CLASIFICACIÓN (WIP, MANUAL, SOPORTE, COPIA) =====
                         // ==========================================================
-                        var renameAudit = elementData.AuditResults.FirstOrDefault(a => a.AuditType.StartsWith("CLASIFICACIÓN") && a.IsCorrectable);
+                        var renameAudit = elementData.AuditResults.FirstOrDefault(a => (a.AuditType.StartsWith("CLASIFICACIÓN") || a.AuditType == "MANUAL") && a.IsCorrectable);
                         if (renameAudit != null)
                         {
                             var jobData = renameAudit.Tag as RenamingJobData;

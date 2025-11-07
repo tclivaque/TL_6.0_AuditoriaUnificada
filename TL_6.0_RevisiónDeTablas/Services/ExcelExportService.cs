@@ -59,13 +59,30 @@ namespace TL60_RevisionDeTablas.Services
                     worksheet.Cells[rowIndex, 4].Value = row.NombreParametro;
                     worksheet.Cells[rowIndex, 5].Value = row.ValorActual;
                     worksheet.Cells[rowIndex, 6].Value = row.ValorCorregido;
-                    worksheet.Cells[rowIndex, 7].Value = row.Estado.ToString();
+                    worksheet.Cells[rowIndex, 7].Value = GetEstadoString(row.Estado);
                     worksheet.Cells[rowIndex, 8].Value = row.Mensaje;
                 }
 
                 worksheet.Cells[1, 1, 1, 8].AutoFitColumns();
 
                 return package.GetAsByteArray();
+            }
+        }
+
+        private string GetEstadoString(EstadoParametro estado)
+        {
+            switch (estado)
+            {
+                case EstadoParametro.Vacio:
+                    return "Advertencias";
+                case EstadoParametro.Correcto:
+                    return "Correcto";
+                case EstadoParametro.Corregir:
+                    return "Corregir";
+                case EstadoParametro.Error:
+                    return "Error";
+                default:
+                    return estado.ToString();
             }
         }
     }

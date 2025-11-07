@@ -522,38 +522,42 @@ namespace TL60_RevisionDeTablas.Services
         public ElementData CreateRenamingJob(ViewSchedule view)
         {
             string nombreActual = view.Name;
-            string grupoActual = view.LookupParameter("GRUPO DE VISTA")?.AsString() ?? "(Vacío)";
             string nombreCorregido = nombreActual.Replace("C.", "SOPORTE.");
             var jobData = new RenamingJobData { NuevoNombre = nombreCorregido, NuevoGrupoVista = "00 TRABAJO EN PROCESO - WIP", NuevoSubGrupoVista = "SOPORTE DE METRADOS" };
-            return CreateJobElementData(view, "CLASIFICACIÓN (SOPORTE)", "Corregir: Tabla de soporte mal clasificada.", $"Grupo: {grupoActual}", $"Grupo: {jobData.NuevoGrupoVista}", jobData);
+            return CreateJobElementData(view, "CLASIFICACIÓN (SOPORTE)", "Corregir: Tabla de soporte mal clasificada.", jobData);
         }
 
         public ElementData CreateManualRenamingJob(ViewSchedule view)
         {
-            string grupoActual = view.LookupParameter("GRUPO DE VISTA")?.AsString() ?? "(Vacío)";
             var jobData = new RenamingJobData { NuevoNombre = view.Name, NuevoGrupoVista = "REVISAR", NuevoSubGrupoVista = "METRADO MANUAL" };
-            return CreateJobElementData(view, "CLASIFICACIÓN (MANUAL)", "Corregir: Tabla de Metrado Manual. Se reclasificará.", $"Grupo: {grupoActual}", $"Grupo: {jobData.NuevoGrupoVista}", jobData);
+            return CreateJobElementData(view, "MANUAL", "Corregir: Tabla de Metrado Manual. Se reclasificará.", jobData);
         }
 
         // (NUEVO)
         public ElementData CreateCopyReclassifyJob(ViewSchedule view)
         {
-            string grupoActual = view.LookupParameter("GRUPO DE VISTA")?.AsString() ?? "(Vacío)";
             var jobData = new RenamingJobData { NuevoNombre = view.Name, NuevoGrupoVista = "REVISAR", NuevoSubGrupoVista = string.Empty };
-            return CreateJobElementData(view, "CLASIFICACIÓN (COPIA)", "Corregir: La tabla parece ser una copia y será reclasificada.", $"Grupo: {grupoActual}", $"Grupo: {jobData.NuevoGrupoVista}", jobData);
+            return CreateJobElementData(view, "COPIA", "Corregir: La tabla parece ser una copia y será reclasificada.", jobData);
         }
 
         // (NUEVO)
         public ElementData CreateWipReclassifyJob(ViewSchedule view)
         {
-            string grupoActual = view.LookupParameter("GRUPO DE VISTA")?.AsString() ?? "(Vacío)";
             var jobData = new RenamingJobData { NuevoNombre = view.Name, NuevoGrupoVista = "00 TRABAJO EN PROCESO - WIP", NuevoSubGrupoVista = "SOPORTE BIM" };
-            return CreateJobElementData(view, "CLASIFICACIÓN (WIP)", "Corregir: Tabla de trabajo interno. Será reclasificada.", $"Grupo: {grupoActual}", $"Grupo: {jobData.NuevoGrupoVista}", jobData);
+            return CreateJobElementData(view, "CLASIFICACIÓN (WIP)", "Corregir: Tabla de trabajo interno. Será reclasificada.", jobData);
         }
 
         // (NUEVO) Helper para crear trabajos
-        private ElementData CreateJobElementData(ViewSchedule view, string auditType, string mensaje, string valorActual, string valorCorregido, RenamingJobData jobData)
+        private ElementData CreateJobElementData(ViewSchedule view, string auditType, string mensaje, RenamingJobData jobData)
         {
+            // (NUEVO) Leer valores actuales
+            string grupoActual = view.LookupParameter("GRUPO DE VISTA")?.AsString() ?? "(Vacío)";
+            string subGrupoActual = view.LookupParameter("SUBGRUPO DE VISTA")?.AsString() ?? "(Vacío)";
+
+            // (NUEVO) Construir strings de valor
+            string valorActualStr = $"Grupo: {grupoActual}\nSubGrupo: {subGrupoActual}";
+            string valorCorregidoStr = $"Grupo: {jobData.NuevoGrupoVista}\nSubGrupo: {jobData.NuevoSubGrupoVista}";
+
             var elementData = new ElementData
             {
                 ElementId = view.Id,
@@ -570,8 +574,8 @@ namespace TL60_RevisionDeTablas.Services
                 IsCorrectable = true,
                 Estado = EstadoParametro.Corregir,
                 Mensaje = mensaje,
-                ValorActual = valorActual,
-                ValorCorregido = valorCorregido,
+                ValorActual = valorActualStr,
+                ValorCorregido = valorCorregidoStr,
                 Tag = jobData
             };
             elementData.AuditResults.Add(auditItem);

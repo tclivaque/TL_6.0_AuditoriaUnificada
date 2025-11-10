@@ -1,19 +1,22 @@
-﻿// Services/ScheduleUpdateWriter.cs
+﻿// Plugins/Tablas/ScheduleUpdateWriter.cs
 using Autodesk.Revit.DB;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using TL60_RevisionDeTablas.Models;
 
-namespace TL60_RevisionDeTablas.Services
+namespace TL60_RevisionDeTablas.Plugins.Tablas
 {
     public class ScheduleUpdateWriter
     {
+        // ==========================================================
+        // ===== (¡CORRECCIÓN!) CAMPO Y CONSTRUCTOR REINSERTADOS
+        // ==========================================================
         private readonly Document _doc;
 
         public ScheduleUpdateWriter(Document doc)
         {
-            _doc = doc;
+            _doc = doc; // <--- (Línea 16)
         }
 
         public ProcessingResult UpdateSchedules(List<ElementData> elementosData)
@@ -25,10 +28,11 @@ namespace TL60_RevisionDeTablas.Services
             int tablasReclasificadas = 0;
             int nombresCorregidos = 0;
             int linksIncluidos = 0;
-            int columnasRenombradas = 0; // (NUEVO) Contador específico
-            int columnasOcultadas = 0; // (NUEVO) Contador específico
+            int columnasRenombradas = 0;
+            int columnasOcultadas = 0;
+            int parcialCorregidos = 0;
 
-            using (Transaction trans = new Transaction(_doc, "Corregir Auditoría de Tablas"))
+            using (Transaction trans = new Transaction(_doc, "Corregir Auditoría de Tablas")) // <--- (Línea 32)
             {
                 try
                 {
@@ -39,15 +43,13 @@ namespace TL60_RevisionDeTablas.Services
                         if (elementData.ElementId == null || elementData.ElementId == ElementId.InvalidElementId)
                             continue;
 
-                        ViewSchedule view = _doc.GetElement(elementData.ElementId) as ViewSchedule;
+                        ViewSchedule view = _doc.GetElement(elementData.ElementId) as ViewSchedule; // <--- (Línea 43)
                         if (view == null) continue;
 
                         ScheduleDefinition definition = view.Definition;
                         bool tablaModificada = false;
 
-                        // ==========================================================
-                        // ===== 1. Ejecutar RENOMBRADO DE TABLA (VIEW NAME) =====
-                        // ==========================================================
+                        // ... (Lógica de corrección 1: VIEW NAME) ...
                         var viewNameAudit = elementData.AuditResults.FirstOrDefault(a => a.AuditType == "VIEW NAME" && a.IsCorrectable);
                         if (viewNameAudit != null)
                         {
@@ -67,17 +69,10 @@ namespace TL60_RevisionDeTablas.Services
                             }
                         }
 
-                        // ==========================================================
-                        // ===== 2. Ejecutar RENOMBRADO DE CLASIFICACIÓN (WIP, MANUAL, SOPORTE, COPIA) =====
-                        // ==========================================================
-
-                        // ==========================================================
-                        // ===== CORRECCIÓN BUG "COPIA" =====
-                        // ==========================================================
+                        // ... (Lógica de corrección 2: CLASIFICACIÓN) ...
                         var renameAudit = elementData.AuditResults.FirstOrDefault(a =>
                             (a.AuditType.StartsWith("CLASIFICACIÓN") || a.AuditType == "MANUAL" || a.AuditType == "COPIA")
                             && a.IsCorrectable);
-
                         if (renameAudit != null)
                         {
                             var jobData = renameAudit.Tag as RenamingJobData;
@@ -88,7 +83,7 @@ namespace TL60_RevisionDeTablas.Services
                             }
                         }
 
-                        // --- 3. Corregir FILTROS ---
+                        // ... (Lógica de corrección 3: FILTRO) ...
                         var filterAudit = elementData.AuditResults.FirstOrDefault(a => a.AuditType == "FILTRO" && a.IsCorrectable);
                         if (filterAudit != null)
                         {
@@ -100,7 +95,7 @@ namespace TL60_RevisionDeTablas.Services
                             }
                         }
 
-                        // --- 4. Corregir CONTENIDO (Itemize) ---
+                        // ... (Lógica de corrección 4: CONTENIDO) ...
                         var contentAudit = elementData.AuditResults.FirstOrDefault(a => a.AuditType == "CONTENIDO" && a.IsCorrectable);
                         if (contentAudit != null)
                         {
@@ -112,7 +107,7 @@ namespace TL60_RevisionDeTablas.Services
                             }
                         }
 
-                        // --- 5. Corregir INCLUDE LINKS ---
+                        // ... (Lógica de corrección 5: LINKS) ...
                         var linksAudit = elementData.AuditResults.FirstOrDefault(a => a.AuditType == "LINKS" && a.IsCorrectable);
                         if (linksAudit != null)
                         {
@@ -124,13 +119,10 @@ namespace TL60_RevisionDeTablas.Services
                             }
                         }
 
-                        // ==========================================================
-                        // ===== 6. Corregir COLUMNAS (Renombrar u Ocultar) =====
-                        // ==========================================================
+                        // ... (Lógica de corrección 6: COLUMNAS) ...
                         var columnAudit = elementData.AuditResults.FirstOrDefault(a => a.AuditType == "COLUMNAS" && a.IsCorrectable);
                         if (columnAudit != null && columnAudit.Tag != null)
                         {
-                            // CASO A: Renombrar (El Tag es un Diccionario)
                             if (columnAudit.Tag is Dictionary<ScheduleField, string> headingsToFix)
                             {
                                 if (WriteHeadings(headingsToFix, result.Errores, elementData.Nombre))
@@ -139,7 +131,6 @@ namespace TL60_RevisionDeTablas.Services
                                     tablaModificada = true;
                                 }
                             }
-                            // CASO B: Ocultar (El Tag es una Lista)
                             else if (columnAudit.Tag is List<ScheduleField> fieldsToHide)
                             {
                                 if (HideColumns(fieldsToHide, result.Errores, elementData.Nombre))
@@ -147,6 +138,34 @@ namespace TL60_RevisionDeTablas.Services
                                     columnasOcultadas += fieldsToHide.Count;
                                     tablaModificada = true;
                                 }
+                            }
+                        }
+
+                        // ... (Lógica de corrección 7: FORMATO PARCIAL (Corregido)) ...
+                        var parcialAudit = elementData.AuditResults.FirstOrDefault(a => a.AuditType == "FORMATO PARCIAL" && a.IsCorrectable);
+                        if (parcialAudit != null && parcialAudit.Tag is ScheduleFieldId)
+                        {
+                            try
+                            {
+                                ScheduleFieldId fieldId = (ScheduleFieldId)parcialAudit.Tag;
+                                ScheduleField field = definition.GetField(fieldId);
+
+                                if (field != null && field.IsValidObject)
+                                {
+                                    FormatOptions options = field.GetFormatOptions();
+
+                                    options.UseDefault = false;
+                                    options.SetSymbolTypeId(new ForgeTypeId()); // <-- Corrección para "None"
+
+                                    field.SetFormatOptions(options);
+
+                                    parcialCorregidos++;
+                                    tablaModificada = true;
+                                }
+                            }
+                            catch (Exception ex)
+                            {
+                                result.Errores.Add($"Error al corregir formato 'PARCIAL' en tabla '{elementData.Nombre}': {ex.Message}");
                             }
                         }
 
@@ -159,9 +178,6 @@ namespace TL60_RevisionDeTablas.Services
                     trans.Commit();
                     result.Exitoso = true;
 
-                    // ==========================================================
-                    // ===== CAMBIO: Mensaje de éxito actualizado =====
-                    // ==========================================================
                     result.Mensaje = $"Corrección completa.\n\n" +
                                      $"Tablas únicas modificadas: {tablasCorregidas}\n\n" +
                                      $"Detalles:\n" +
@@ -169,6 +185,7 @@ namespace TL60_RevisionDeTablas.Services
                                      $"- Encabezados renombrados: {columnasRenombradas}\n" +
                                      $"- Columnas ocultadas: {columnasOcultadas}\n" +
                                      $"- Tablas reclasificadas: {tablasReclasificadas}\n" +
+                                     $"- Formatos 'PARCIAL' corregidos: {parcialCorregidos}\n" +
                                      $"- Filtros corregidos: {filtrosCorregidos}\n" +
                                      $"- Contenidos (Itemize) corregidos: {contenidosCorregidos}\n" +
                                      $"- 'Include Links' activados: {linksIncluidos}";
@@ -184,6 +201,7 @@ namespace TL60_RevisionDeTablas.Services
             return result;
         }
 
+        // ... (Todos los métodos privados: RenameAndReclassify, WriteHeadings, etc. van aquí) ...
         private bool RenameAndReclassify(ViewSchedule view, RenamingJobData jobData, List<string> errores)
         {
             try
@@ -234,9 +252,6 @@ namespace TL60_RevisionDeTablas.Services
             }
         }
 
-        // ==========================================================
-        // ===== NUEVO MÉTODO: Ocultar Columnas =====
-        // ==========================================================
         private bool HideColumns(List<ScheduleField> fieldsToHide, List<string> errores, string nombreTabla)
         {
             try
@@ -316,7 +331,6 @@ namespace TL60_RevisionDeTablas.Services
 
         private ScheduleField FindField(ScheduleDefinition definition, string fieldName)
         {
-            // (NUEVO) Búsqueda robusta que ignora prefijos
             for (int i = 0; i < definition.GetFieldCount(); i++)
             {
                 var field = definition.GetField(i);
@@ -328,7 +342,6 @@ namespace TL60_RevisionDeTablas.Services
                 }
             }
 
-            // Fallback para campos sin prefijo (ej. "EMPRESA" si se añade nuevo)
             for (int i = 0; i < definition.GetFieldCount(); i++)
             {
                 var field = definition.GetField(i);

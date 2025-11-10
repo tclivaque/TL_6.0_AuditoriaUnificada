@@ -1,22 +1,23 @@
 ﻿// UI/MainWindow.xaml.cs
+using Autodesk.Revit.DB;
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
-using Autodesk.Revit.DB;
 using TL60_RevisionDeTablas.Models;
+// (¡CORRECCIÓN! El 'using' ahora apunta a la nueva carpeta del plugin)
+using TL60_RevisionDeTablas.Plugins.Tablas;
 using TL60_RevisionDeTablas.Services;
-using System.IO;
 
 namespace TL60_RevisionDeTablas.UI
 {
     public partial class MainWindow : Window
     {
-        // (NUEVO) Almacena la lista original sin filtrar
+        // (El resto del archivo es idéntico al original)
         private readonly List<DiagnosticRow> _originalDiagnosticRows;
-        // (MODIFICADO) Esta lista ahora contendrá los datos filtrados
         private List<DiagnosticRow> _diagnosticRows;
 
         private readonly List<ElementData> _elementosData;
@@ -28,12 +29,12 @@ namespace TL60_RevisionDeTablas.UI
             List<DiagnosticRow> diagnosticRows,
             List<ElementData> elementosData,
             Document doc,
-            ScheduleUpdateAsync writerAsync,
+            ScheduleUpdateAsync writerAsync, // <-- Ahora coincide con el 'using' de Plugins.Tablas
             ViewActivatorAsync viewActivator)
         {
             InitializeComponent();
             _originalDiagnosticRows = diagnosticRows ?? new List<DiagnosticRow>();
-            _diagnosticRows = _originalDiagnosticRows; // Al inicio, la lista mostrada es la original
+            _diagnosticRows = _originalDiagnosticRows;
             _elementosData = elementosData;
             _doc = doc;
             _writerAsync = writerAsync;
@@ -44,33 +45,26 @@ namespace TL60_RevisionDeTablas.UI
 
         private void LoadData()
         {
-            // (MODIFICADO) Lógica de conteo copiada del proyecto COBie
             int total = _originalDiagnosticRows.Count;
             int correctos = _originalDiagnosticRows.Count(r => r.Estado == EstadoParametro.Correcto);
             int vacios = _originalDiagnosticRows.Count(r => r.Estado == EstadoParametro.Vacio);
             int aCorregir = _originalDiagnosticRows.Count(r => r.Estado == EstadoParametro.Corregir);
             int errores = _originalDiagnosticRows.Count(r => r.Estado == EstadoParametro.Error);
 
-            // (MODIFICADO) Actualizar los TextBlocks de la nueva leyenda
             TotalTextBlock.Text = $"Total: {total}";
             CorregirTextBlock.Text = $"🔧 A Corregir: {aCorregir}";
             VacioTextBlock.Text = $"⚠ Advertencias: {vacios}";
             ErrorTextBlock.Text = $"❌ Errores: {errores}";
             CorrectoTextBlock.Text = $"✅ Correctos: {correctos}";
 
-            // (MODIFICADO) El DataGrid ahora se alimenta de la lista _diagnosticRows (que puede ser filtrada)
             DiagnosticDataGrid.ItemsSource = null;
             DiagnosticDataGrid.ItemsSource = _diagnosticRows;
         }
 
-        /// <summary>
-        /// (NUEVO) Manejador de clics para los botones de la leyenda (copiado de COBie)
-        /// </summary>
         private void FilterButton_Click(object sender, RoutedEventArgs e)
         {
             if (!(sender is Button button) || !(button.Tag is string filterTag)) return;
 
-            // Filtrar la lista original y asignarla a la lista mostrada
             switch (filterTag)
             {
                 case "Correcto":
@@ -91,18 +85,13 @@ namespace TL60_RevisionDeTablas.UI
                     break;
             }
 
-            // Recargar el DataGrid con la lista filtrada
             DiagnosticDataGrid.ItemsSource = null;
             DiagnosticDataGrid.ItemsSource = _diagnosticRows;
         }
 
-        /// <summary>
-        /// Botón "Corregir"
-        /// </summary>
         private async void CorregirButton_Click(object sender, RoutedEventArgs e)
         {
-            // (Lógica sin cambios, ya era correcta)
-            var idsACorregir = _originalDiagnosticRows // (MODIFICADO) Siempre buscar en la lista original
+            var idsACorregir = _originalDiagnosticRows
                 .Where(r => r.Estado == EstadoParametro.Corregir)
                 .Select(r => r.ElementId)
                 .Distinct()
@@ -121,7 +110,7 @@ namespace TL60_RevisionDeTablas.UI
             try
             {
                 CorregirButton.IsEnabled = false;
-                CerrarButton.IsEnabled = false; // (MODIFICADO) Deshabilitar ambos botones
+                CerrarButton.IsEnabled = false;
                 CorregirButton.Content = "Corrigiendo...";
 
                 ProcessingResult writeResult = await Task.Run(() =>
@@ -130,7 +119,7 @@ namespace TL60_RevisionDeTablas.UI
                 });
 
                 CorregirButton.IsEnabled = true;
-                CerrarButton.IsEnabled = true; // (MODIFICADO) Rehabilitar ambos botones
+                CerrarButton.IsEnabled = true;
                 CorregirButton.Content = "Corregir";
 
                 if (!writeResult.Exitoso)
@@ -140,14 +129,14 @@ namespace TL60_RevisionDeTablas.UI
                 else
                 {
                     MessageBox.Show(writeResult.Mensaje, "Éxito", MessageBoxButton.OK, MessageBoxImage.Information);
-                    this.Close(); // Cerrar al éxito
+                    this.Close();
                 }
             }
             catch (Exception ex)
             {
                 MessageBox.Show($"Error fatal: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
                 CorregirButton.IsEnabled = true;
-                CerrarButton.IsEnabled = true; // (MODIFICADO) Rehabilitar ambos botones
+                CerrarButton.IsEnabled = true;
                 CorregirButton.Content = "Corregir";
             }
         }
@@ -164,8 +153,8 @@ namespace TL60_RevisionDeTablas.UI
             {
                 try
                 {
+                    // (El 'using' de ExcelExportService debe ser 'TL60_RevisionDeTablas.Plugins.Tablas')
                     var exportService = new ExcelExportService();
-                    // (MODIFICADO) Exportar la lista que se está mostrando actualmente (filtrada o no)
                     byte[] fileBytes = exportService.ExportToExcel(_diagnosticRows);
                     File.WriteAllBytes(dialog.FileName, fileBytes);
 
@@ -186,7 +175,6 @@ namespace TL60_RevisionDeTablas.UI
             {
                 return;
             }
-            // (NUEVO) Asignar propiedad EsSeleccionable de la fila, copiado de COBie
             row.EsSeleccionable = (row.ElementId != null && row.ElementId != ElementId.InvalidElementId);
 
             try

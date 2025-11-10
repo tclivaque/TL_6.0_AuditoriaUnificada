@@ -1,20 +1,20 @@
-﻿// Services/ManualScheduleService.cs
+﻿// Core/UniclassDataService.cs
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using TL60_RevisionDeTablas.Services;
 
-namespace TL60_RevisionDeTablas.Services
+namespace TL60_RevisionDeTablas.Core
 {
     /// <summary>
-    /// Lee las hojas "Matriz UniClass" para determinar si una tabla es de metrado MANUAL o REVIT.
-    /// (MODIFICADO: Ya no lee la descripción, solo el tipo de metrado)
+    /// Servicio compartido para leer la "Matriz UniClass" desde Google Sheets.
+    /// Centraliza la lógica de qué Assembly Code es "REVIT" o "MANUAL".
+    /// Reemplaza a ManualScheduleService.
     /// </summary>
-    public class ManualScheduleService
+    public class UniclassDataService
     {
         private readonly GoogleSheetsService _sheetsService;
         private readonly string _docTitle;
-        // (MODIFICADO) El caché ahora solo guarda el tipo (Col L)
         private readonly Dictionary<string, string> _classificationCache;
 
         private const string SHEET_ACTIVO = "Matriz UniClass - ACTIVO";
@@ -29,13 +29,16 @@ namespace TL60_RevisionDeTablas.Services
 
         private const string _dualReadCode = "200114-CCC02-MO-ES-000410";
 
-        public ManualScheduleService(GoogleSheetsService sheetsService, string docTitle)
+        public UniclassDataService(GoogleSheetsService sheetsService, string docTitle)
         {
             _sheetsService = sheetsService ?? throw new ArgumentNullException(nameof(sheetsService));
             _docTitle = docTitle ?? string.Empty;
             _classificationCache = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         }
 
+        /// <summary>
+        /// Carga los datos desde Google Sheets al caché.
+        /// </summary>
         public void LoadClassificationData(string spreadsheetId)
         {
             var sheetsToRead = new List<string>();
@@ -72,11 +75,13 @@ namespace TL60_RevisionDeTablas.Services
                         if (string.IsNullOrWhiteSpace(assemblyCode))
                             continue;
 
+                        // Almacenar el tipo. Si está vacío, se asume "REVIT".
                         _classificationCache[assemblyCode.Trim()] = string.IsNullOrWhiteSpace(metradoType) ? "REVIT" : metradoType.Trim();
                     }
                 }
                 catch (Exception ex)
                 {
+                    // No lanzar excepción, solo registrar y continuar.
                     System.Diagnostics.Debug.WriteLine($"Error al leer {sheetName}: {ex.Message}");
                 }
             }
@@ -85,18 +90,21 @@ namespace TL60_RevisionDeTablas.Services
         /// <summary>
         /// Obtiene el tipo de metrado (MANUAL o REVIT) para un Assembly Code.
         /// </summary>
+        /// <returns>"MANUAL", "REVIT" o "DESCONOCIDO"</returns>
         public string GetScheduleType(string assemblyCode)
         {
             if (string.IsNullOrWhiteSpace(assemblyCode))
-                return "REVIT"; // Default
+                return "DESCONOCIDO"; // No se puede determinar
 
-            if (_classificationCache.TryGetValue(assemblyCode, out string type))
+            if (_classificationCache.TryGetValue(assemblyCode.Trim(), out string type))
             {
                 if (type.Equals("MANUAL", StringComparison.OrdinalIgnoreCase))
                     return "MANUAL";
+
+                return "REVIT"; // Incluye "REVIT" y cualquier otro valor no vacío
             }
 
-            return "REVIT";
+            return "DESCONOCIDO"; // No se encontró en la base de datos
         }
     }
 }

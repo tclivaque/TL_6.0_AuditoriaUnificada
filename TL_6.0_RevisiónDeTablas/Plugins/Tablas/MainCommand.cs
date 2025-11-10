@@ -1,17 +1,19 @@
-﻿// Commands/MainCommand.cs
+﻿// Plugins/Tablas/MainCommand.cs
+using Autodesk.Revit.Attributes;
 using Autodesk.Revit.DB;
 using Autodesk.Revit.UI;
-using Autodesk.Revit.Attributes;
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.IO;
+using System.Linq;
 using System.Text.RegularExpressions;
+using TL60_RevisionDeTablas.Core;       // <-- Actualizado
 using TL60_RevisionDeTablas.Models;
+using TL60_RevisionDeTablas.Plugins.Tablas; // <-- Actualizado
 using TL60_RevisionDeTablas.Services;
 using TL60_RevisionDeTablas.UI;
 
-namespace TL60_RevisionDeTablas.Commands
+namespace TL60_RevisionDeTablas.Plugins.Tablas // <-- Actualizado
 {
     [Transaction(TransactionMode.Manual)]
     [Regeneration(RegenerationOption.Manual)]
@@ -26,6 +28,28 @@ namespace TL60_RevisionDeTablas.Commands
         };
 
         private static readonly Regex _acRegex = new Regex(@"^C\.(\d{2,3}\.)+\d{2,3}");
+
+        // TODO: Definir la lista de categorías para la auditoría de elementos
+        private static readonly List<BuiltInCategory> _categoriesToAudit = new List<BuiltInCategory>
+        {
+            // Por ejemplo:
+            // BuiltInCategory.OST_Walls,
+            // BuiltInCategory.OST_Floors,
+            // BuiltInCategory.OST_Ceilings,
+            // BuiltInCategory.OST_Roofs,
+            // BuiltInCategory.OST_Columns,
+            // BuiltInCategory.OST_StructuralFraming,
+            // BuiltInCategory.OST_StructuralFoundation,
+            // BuiltInCategory.OST_MechanicalEquipment,
+            // BuiltInCategory.OST_DuctTerminal,
+            // BuiltInCategory.OST_PipeFixtures,
+            // BuiltInCategory.OST_PlumbingFixtures,
+            // BuiltInCategory.OST_LightingFixtures,
+            // BuiltInCategory.OST_ElectricalEquipment,
+            // BuiltInCategory.OST_CableTray,
+            // BuiltInCategory.OST_Conduit
+        };
+
 
         public Result Execute(
             ExternalCommandData commandData,
@@ -42,12 +66,14 @@ namespace TL60_RevisionDeTablas.Commands
                 var sheetsService = new GoogleSheetsService();
                 string docTitle = Path.GetFileNameWithoutExtension(doc.Title);
 
-                var manualScheduleService = new ManualScheduleService(sheetsService, docTitle);
-                manualScheduleService.LoadClassificationData(SPREADSHEET_ID);
+                // (MODIFICADO) Usar el nuevo servicio compartido
+                var uniclassService = new UniclassDataService(sheetsService, docTitle);
+                uniclassService.LoadClassificationData(SPREADSHEET_ID);
 
-                var processor = new ScheduleProcessor(doc, sheetsService, manualScheduleService, SPREADSHEET_ID);
+                var processor = new ScheduleProcessor(doc, sheetsService, uniclassService, SPREADSHEET_ID);
 
                 var elementosData = new List<ElementData>();
+                var existingMetradoCodes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
                 // 2. Obtener todas las tablas
                 var allSchedules = new FilteredElementCollector(doc)
@@ -55,81 +81,55 @@ namespace TL60_RevisionDeTablas.Commands
                     .WhereElementIsNotElementType()
                     .Cast<ViewSchedule>();
 
-                // ==========================================================
-                // ===== LÓGICA DE BIFURCACIÓN (MODIFICADA) =====
-                // ==========================================================
-
+                // 3. Procesar Tablas de Planificación (Lógica existente)
                 foreach (ViewSchedule view in allSchedules)
                 {
+                    // ... (Lógica de bifurcación sin cambios)...
                     if (view == null || view.Definition == null) continue;
-
                     string viewName = view.Name;
                     string viewNameUpper = viewName.ToUpper();
 
-                    // -----------------------------------------------------------------
-                    // FILTRO 1: ¿Nombre empieza con "C."?
-                    // -----------------------------------------------------------------
                     if (viewNameUpper.StartsWith("C."))
                     {
-                        // -----------------------------------------------------------------
-                        // FILTRO 2 (REQ 4.A/B): ¿Es "copy", "copia" o WIP?
-                        // -----------------------------------------------------------------
                         if (viewNameUpper.Contains("COPY") || viewNameUpper.Contains("COPIA"))
                         {
-                            // ==========================================================
-                            // ===== CORRECCIÓN: Evitar Falso Positivo "COPIA" =====
-                            // ==========================================================
+                            // ... (lógica de COPIA sin cambios) ...
                             string grupoVista = view.LookupParameter("GRUPO DE VISTA")?.AsString() ?? string.Empty;
                             string subGrupoVista = view.LookupParameter("SUBGRUPO DE VISTA")?.AsString() ?? string.Empty;
-
-                            // El estado corregido de "COPIA" es "REVISAR" y "" (vacío)
-                            if (grupoVista.Equals("REVISAR", StringComparison.OrdinalIgnoreCase) &&
-                                string.IsNullOrEmpty(subGrupoVista))
+                            if (grupoVista.Equals("REVISAR", StringComparison.OrdinalIgnoreCase) && string.IsNullOrEmpty(subGrupoVista))
                             {
-                                continue; // Ya está corregido, no reportar.
+                                continue;
                             }
-                            // ==========================================================
-
                             elementosData.Add(processor.CreateCopyReclassifyJob(view));
-                            continue; // Fin del análisis para esta tabla
+                            continue;
                         }
 
                         if (NOMBRES_WIP.Any(name => viewNameUpper.Contains(name)))
                         {
                             elementosData.Add(processor.CreateWipReclassifyJob(view));
-                            continue; // Fin del análisis para esta tabla
+                            continue;
                         }
 
-                        // Extraer Assembly Code del nombre
                         Match acMatch = _acRegex.Match(viewName);
                         string assemblyCode = acMatch.Success ? acMatch.Value : "INVALID_AC";
 
-                        // -----------------------------------------------------------------
-                        // FILTRO 3 (Req G-Sheets): ¿Es "MANUAL" o "REVIT"?
-                        // -----------------------------------------------------------------
-                        string scheduleType = manualScheduleService.GetScheduleType(assemblyCode);
+                        // (MODIFICADO) Usar el nuevo servicio
+                        string scheduleType = uniclassService.GetScheduleType(assemblyCode);
 
                         if (scheduleType.Equals("MANUAL", StringComparison.OrdinalIgnoreCase))
                         {
-                            // (Corrección Falso Positivo "MANUAL")
+                            // ... (lógica MANUAL sin cambios) ...
                             string grupoVista = view.LookupParameter("GRUPO DE VISTA")?.AsString() ?? string.Empty;
                             string subGrupoVista = view.LookupParameter("SUBGRUPO DE VISTA")?.AsString() ?? string.Empty;
-
-                            if (grupoVista.Equals("REVISAR", StringComparison.OrdinalIgnoreCase) &&
-                                subGrupoVista.Equals("METRADO MANUAL", StringComparison.OrdinalIgnoreCase))
+                            if (grupoVista.Equals("REVISAR", StringComparison.OrdinalIgnoreCase) && subGrupoVista.Equals("METRADO MANUAL", StringComparison.OrdinalIgnoreCase))
                             {
-                                continue; // Ya está corregido, no reportar.
+                                continue;
                             }
-
                             elementosData.Add(processor.CreateManualRenamingJob(view));
-                            continue; // Fin del análisis para esta tabla
+                            continue;
                         }
 
-                        // -----------------------------------------------------------------
-                        // FILTRO 4 (Grupo Vista): ¿Es "Metrado" o "Soporte"?
-                        // -----------------------------------------------------------------
-
-                        // Es "REVIT" (o no encontrado)
+                        // Es "REVIT" o "DESCONOCIDO"
                         Parameter groupParam = view.LookupParameter("GRUPO DE VISTA");
                         string groupValue = groupParam?.AsString() ?? string.Empty;
 
@@ -137,6 +137,12 @@ namespace TL60_RevisionDeTablas.Commands
                         {
                             // CASO A: "Tabla de Metrados" -> Auditar
                             elementosData.Add(processor.ProcessSingleElement(view, assemblyCode));
+
+                            // (NUEVO) Guardar el AC para la auditoría de elementos
+                            if (assemblyCode != "INVALID_AC")
+                            {
+                                existingMetradoCodes.Add(assemblyCode);
+                            }
                         }
                         else
                         {
@@ -145,22 +151,56 @@ namespace TL60_RevisionDeTablas.Commands
                         }
                     }
                 }
-                // ==========================================================
-                // ===== FIN DE LÓGICA DE BIFURCACIÓN =====
-                // ==========================================================
 
-                // (NUEVO) 3. POST-PROCESO: Auditoría de Duplicados
+                // ==========================================================
+                // ===== 4. (¡NUEVO!) EJECUTAR AUDITORÍA DE ELEMENTOS (Tablas Faltantes)
+                // ==========================================================
+                if (_categoriesToAudit.Count > 0)
+                {
+                    var elementAuditor = new MissingScheduleAuditor(doc, uniclassService);
+                    ElementData missingSchedulesReport = elementAuditor.FindMissingSchedules(existingMetradoCodes, _categoriesToAudit);
+
+                    if (missingSchedulesReport != null)
+                    {
+                        elementosData.Add(missingSchedulesReport);
+                    }
+                }
+                else
+                {
+                    // Reportar que la auditoría de elementos no está configurada
+                    elementosData.Add(new ElementData
+                    {
+                        ElementId = ElementId.InvalidElementId,
+                        Nombre = "Auditoría de Elementos",
+                        Categoria = "Sistema",
+                        DatosCompletos = false,
+                        AuditResults = new List<AuditItem>
+                        {
+                            new AuditItem
+                            {
+                                AuditType = "CONFIGURACIÓN",
+                                Estado = EstadoParametro.Vacio, // Advertencia
+                                Mensaje = "La auditoría de elementos modelados (Tablas Faltantes) no está configurada. " +
+                                          "Se debe definir la lista de categorías a revisar en MainCommand.cs."
+                            }
+                        }
+                    });
+                }
+
+                // ==========================================================
+                // ===== 5. POST-PROCESO: Auditoría de Duplicados
+                // ==========================================================
                 RunDuplicateCheck(elementosData);
 
-                // 4. Construir datos de diagnóstico
+                // 6. Construir datos de diagnóstico
                 var diagnosticBuilder = new DiagnosticDataBuilder();
                 List<DiagnosticRow> diagnosticRows = diagnosticBuilder.BuildDiagnosticRows(elementosData);
 
-                // 5. Preparar los Writers Asíncronos
+                // 7. Preparar los Writers Asíncronos
                 var writerAsync = new ScheduleUpdateAsync();
                 var viewActivator = new ViewActivatorAsync();
 
-                // 6. Crear y mostrar ventana Modeless
+                // 8. Crear y mostrar ventana Modeless
                 var mainWindow = new MainWindow(
                     diagnosticRows,
                     elementosData,
@@ -182,53 +222,41 @@ namespace TL60_RevisionDeTablas.Commands
         }
 
         /// <summary>
-        /// (NUEVO) Ejecuta la auditoría de duplicados
+        /// (Lógica sin cambios)
         /// </summary>
         private void RunDuplicateCheck(List<ElementData> elementosData)
         {
-            // 1. Filtrar solo tablas de metrados (las que tienen auditorías de FILTRO)
+            // ... (Lógica de RunDuplicateCheck sin cambios) ...
             var metradosTablas = elementosData
                 .Where(ed => ed.AuditResults.Any(ar => ar.AuditType == "FILTRO"))
                 .ToList();
-
-            // 2. Agrupar por Assembly Code
             var groupedByAC = metradosTablas.GroupBy(ed => ed.CodigoIdentificacion);
-
             foreach (var acGroup in groupedByAC)
             {
-                if (acGroup.Count() < 2) continue; // No hay duplicados de A.C.
-
-                // 3. Sub-agrupar por Tipo (Material vs Cantidades)
+                if (acGroup.Count() < 2) continue;
                 var groupedByType = acGroup.GroupBy(ed =>
                     (ed.Element as ViewSchedule)?.Definition.IsMaterialTakeoff ?? false
                 );
-
                 foreach (var typeGroup in groupedByType)
                 {
                     if (typeGroup.Count() < 2) continue;
-
-                    // 4. Sub-agrupar por Categoría
                     var groupedByCategory = typeGroup.GroupBy(ed =>
                         (ed.Element as ViewSchedule)?.Definition.CategoryId.ToString() ?? "NONE"
                     );
-
                     foreach (var categoryGroup in groupedByCategory)
                     {
                         if (categoryGroup.Count() < 2) continue;
-
-                        // 5. ¡Duplicado Encontrado! Marcar todos
                         foreach (var elementData in categoryGroup)
                         {
                             elementData.AuditResults.Add(new AuditItem
                             {
                                 AuditType = "DUPLICADO",
-                                Estado = EstadoParametro.Vacio, // Estado Advertencia
+                                Estado = EstadoParametro.Vacio,
                                 Mensaje = "Advertencia: Tabla duplicada (mismo A.C., tipo y categoría).",
                                 ValorActual = elementData.Nombre,
                                 ValorCorregido = "N/A",
                                 IsCorrectable = false
                             });
-
                             elementData.DatosCompletos = false;
                         }
                     }

@@ -1,12 +1,12 @@
-﻿// Services/ScheduleUpdateHandler.cs (Anteriormente ScheduleWriterHandler.cs)
+﻿// Plugins/Tablas/ScheduleWriterHandler.cs
 using System;
 using System.Collections.Generic;
 using System.Threading;
 using Autodesk.Revit.DB;
 using Autodesk.Revit.UI;
-using TL60_RevisionDeTablas.Models;
+using TL60_RevisionDeTablas.Models; // <--- (¡CORRECCIÓN!) Añadido
 
-namespace TL60_RevisionDeTablas.Services
+namespace TL60_RevisionDeTablas.Plugins.Tablas // <--- (¡CORRECCIÓN!) Namespace actualizado
 {
     /// <summary>
     /// Maneja la escritura de correcciones usando ExternalEvent
@@ -35,8 +35,8 @@ namespace TL60_RevisionDeTablas.Services
         {
             try
             {
-                // Llama al nuevo Writer
-                var writer = new ScheduleUpdateWriter(_doc);
+                // (Ahora 'ScheduleUpdateWriter' está en el mismo namespace)
+                var writer = new ScheduleUpdateWriter(_doc); // <--- (Línea 39)
                 _result = writer.UpdateSchedules(_elementosData);
             }
             catch (Exception ex)
@@ -86,11 +86,8 @@ namespace TL60_RevisionDeTablas.Services
                 _handler.SetData(doc, elementosData, resetEvent);
                 _externalEvent.Raise();
 
-                // ==========================================================
-                // ===== CAMBIO AQUÍ: Timeout extendido a 600 segundos =====
-                // ==========================================================
-                bool completed = resetEvent.WaitOne(TimeSpan.FromSeconds(600)); // Timeout 600s
-                // ==========================================================
+                // Timeout extendido a 600 segundos
+                bool completed = resetEvent.WaitOne(TimeSpan.FromSeconds(600));
 
                 if (!completed)
                 {

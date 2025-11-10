@@ -1,4 +1,4 @@
-﻿// Services/GoogleSheetsService.cs
+﻿// Core/GoogleSheetsService.cs
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -8,7 +8,8 @@ using Google.Apis.Sheets.v4;
 using Google.Apis.Sheets.v4.Data;
 using Google.Apis.Services;
 
-namespace TL60_RevisionDeTablas.Services
+// (ASEGURAR QUE EL NAMESPACE ES .Core)
+namespace TL60_RevisionDeTablas.Core
 {
     public class GoogleSheetsService
     {
@@ -32,7 +33,6 @@ namespace TL60_RevisionDeTablas.Services
                 GoogleCredential credential;
                 using (var stream = new FileStream(CREDENTIALS_PATH, FileMode.Open, FileAccess.Read))
                 {
-                    // (CORREGIDO) Suprimir advertencia de obsoleto, igual que en el proyecto COBie
 #pragma warning disable CS0618
                     credential = GoogleCredential.FromStream(stream)
                         .CreateScoped(new[] { SheetsService.Scope.Spreadsheets });
@@ -42,7 +42,6 @@ namespace TL60_RevisionDeTablas.Services
                 _service = new SheetsService(new BaseClientService.Initializer()
                 {
                     HttpClientInitializer = credential,
-                    // IMPORTANTE: NO usar acentos
                     ApplicationName = "TL60RevisionDeTablas"
                 });
             }

@@ -556,7 +556,10 @@ namespace TL60_RevisionDeTablas.Plugins.Tablas
         }
         #endregion
 
-        #region Auditoría 6: FORMATO "PARCIAL" (Corregido)
+        // ==========================================================
+        // ===== (¡MODIFICADO!) AUDITORÍA 6: FORMATO "PARCIAL"
+        // ==========================================================
+        #region Auditoría 6: FORMATO "PARCIAL" (Lógica Exhaustiva)
 
         private AuditItem ProcessParcialFormat(ScheduleDefinition definition)
         {
@@ -590,44 +593,70 @@ namespace TL60_RevisionDeTablas.Plugins.Tablas
                 return item;
             }
 
-            // ==========================================================
-            // ===== (¡LA LÍNEA CORREGIDA!)
-            // ==========================================================
-            // (Línea 594 aprox)
-            // Comprobar si el FieldType es 'Count'. Esta es la forma correcta.
+            // Excepción para "Count" (Recuento)
             if (parcialField.FieldType == ScheduleFieldType.Count)
             {
                 item.Estado = EstadoParametro.Correcto;
                 item.Mensaje = "Correcto: El campo 'Recuento' (Count) no requiere formato.";
                 return item;
             }
-            // ==========================================================
 
             try
             {
                 FormatOptions options = parcialField.GetFormatOptions();
 
-                ForgeTypeId symbolId = options.GetSymbolTypeId();
-                bool isCorrect = !options.UseDefault && (symbolId == null || string.IsNullOrEmpty(symbolId.TypeId));
+                // ==========================================================
+                // ===== (¡NUEVA LÓGICA EXHAUSTIVA!)
+                // ==========================================================
 
-                item.ValorActual = $"Símbolo: {symbolId?.TypeId ?? "NINGUNO"} (Usa Default: {options.UseDefault})";
-                item.ValorCorregido = $"Símbolo: NINGUNO (Usa Default: False)";
+                // 1. Definir el estado "Correcto"
+                const bool correctUseDefault = false;
+                const double correctRounding = 0.01;
+                // (Para 'None', el símbolo es un ForgeTypeId nulo o vacío)
+
+                // 2. Obtener el estado "Actual"
+                bool actualUseDefault = options.UseDefault;
+                double actualRounding = options.Accuracy;
+                ForgeTypeId actualSymbolId = null;
+                string actualSymbolText = "(Project)";
+
+                if (!actualUseDefault)
+                {
+                    // Solo podemos leer el símbolo si UseDefault es false
+                    actualSymbolId = options.GetSymbolTypeId();
+                    actualSymbolText = actualSymbolId?.TypeId ?? "NINGUNO";
+                }
+
+                // 3. Comprobar las tres condiciones
+                bool isUseDefaultCorrect = (actualUseDefault == correctUseDefault);
+                bool isRoundingCorrect = (actualRounding == correctRounding);
+                bool isSymbolCorrect = (actualSymbolId == null || string.IsNullOrEmpty(actualSymbolId.TypeId));
+
+                // (Nota: Si actualUseDefault es true, isSymbolCorrect será true, pero isUseDefaultCorrect será false)
+                if (actualUseDefault) isSymbolCorrect = false; // Forzar fallo de símbolo si se usa Default
+
+                bool isCorrect = isUseDefaultCorrect && isRoundingCorrect && isSymbolCorrect;
+
+                // 4. Reportar
+                item.ValorActual = $"Default: {actualUseDefault}, Símbolo: {actualSymbolText}, Round: {actualRounding}";
+                item.ValorCorregido = $"Default: {correctUseDefault}, Símbolo: NINGUNO, Round: {correctRounding}";
 
                 if (isCorrect)
                 {
-                    item.Mensaje = "Correcto: El formato de 'PARCIAL' no muestra unidad.";
+                    item.Estado = EstadoParametro.Correcto;
+                    item.Mensaje = "Correcto: El formato de 'PARCIAL' es adimensional y con 2 decimales.";
                 }
                 else
                 {
                     item.Estado = EstadoParametro.Corregir;
-                    item.Mensaje = "Corregir: La columna 'PARCIAL' debe ocultar el símbolo de unidad.";
+                    item.Mensaje = "Corregir: El formato de 'PARCIAL' debe ser personalizado (sin símbolo y con 2 decimales).";
                     item.IsCorrectable = true;
-                    item.Tag = parcialField.FieldId;
+                    item.Tag = parcialField.FieldId; // Marcar para corrección
                 }
             }
             catch (Exception ex)
             {
-                // Si da error (ej. "UseDefault is true..."), lo marcamos como Advertencia
+                // Este 'catch' ahora SOLO se activará para campos genuinamente no personalizables (que no sean "Count")
                 item.Estado = EstadoParametro.Vacio;
                 item.Mensaje = $"Advertencia: No se pudo verificar el formato (campo no personalizable). {ex.Message}";
             }

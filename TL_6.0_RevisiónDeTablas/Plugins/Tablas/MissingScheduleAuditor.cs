@@ -5,7 +5,7 @@ using System.Linq;
 using System;
 using TL60_RevisionDeTablas.Core;
 using TL60_RevisionDeTablas.Models;
-using System.Text;
+// using System.Text; // <--- Retirado
 using System.IO;
 
 namespace TL60_RevisionDeTablas.Plugins.Tablas
@@ -21,12 +21,15 @@ namespace TL60_RevisionDeTablas.Plugins.Tablas
             _uniclassService = uniclassService;
         }
 
+        /// <summary>
+        /// Busca tablas faltantes y devuelve un ElementData "dummy" con los errores.
+        /// (¡MODIFICADO! Logger 'sb' retirado de la firma)
+        /// </summary>
         public ElementData FindMissingSchedules(
             IEnumerable<string> existingScheduleCodes,
-            List<BuiltInCategory> categoriesToAudit,
-            StringBuilder sb)
+            List<BuiltInCategory> categoriesToAudit)
         {
-            sb.AppendLine("  --- Debugging MissingScheduleAuditor ---");
+            // --- Debug logs retirados ---
 
             // 1. Obtener Especialidad del Documento Principal
             string mainDocTitle = Path.GetFileNameWithoutExtension(_doc.Title);
@@ -38,33 +41,25 @@ namespace TL60_RevisionDeTablas.Plugins.Tablas
                 {
                     mainSpecialty = parts[3];
                 }
-                sb.AppendLine($"  > Especialidad del Doc. Principal: '{mainSpecialty}' (de '{mainDocTitle}')");
             }
-            catch (Exception ex)
+            catch (Exception)
             {
-                sb.AppendLine($"  > ADVERTENCIA: No se pudo extraer especialidad de '{mainDocTitle}': {ex.Message}");
+                // Ignorar error si el nombre no es estándar
             }
 
             // 2. Obtener lista de TODOS los documentos a escanear (Principal + Vínculos)
             List<Document> docsToScan = new List<Document>();
-            docsToScan.Add(_doc);
-            sb.AppendLine("  > Documento principal añadido a la cola de escaneo.");
+            docsToScan.Add(_doc); // Añadir el documento principal
 
-            sb.AppendLine("  > Buscando Vínculos (Revit Links) relevantes...");
             var linkInstances = new FilteredElementCollector(_doc)
                 .OfClass(typeof(RevitLinkInstance))
                 .Cast<RevitLinkInstance>();
-
-            int linksEncontrados = 0;
-            int linksIgnorados = 0;
-            int linksRelevantes = 0;
 
             foreach (var linkInstance in linkInstances)
             {
                 Document linkDoc = linkInstance.GetLinkDocument();
                 if (linkDoc == null) continue;
 
-                linksEncontrados++;
                 RevitLinkType linkType = _doc.GetElement(linkInstance.GetTypeId()) as RevitLinkType;
                 if (linkType == null) continue;
 
@@ -81,8 +76,7 @@ namespace TL60_RevisionDeTablas.Plugins.Tablas
                 }
                 catch
                 {
-                    sb.AppendLine($"    > Vínculo '{linkName}' tiene nombre no estándar.");
-                    continue;
+                    continue; // Ignorar nombre no estándar
                 }
 
                 if (linkSpecialty.Equals(mainSpecialty, StringComparison.OrdinalIgnoreCase))
@@ -90,23 +84,13 @@ namespace TL60_RevisionDeTablas.Plugins.Tablas
                     if (!docsToScan.Contains(linkDoc))
                     {
                         docsToScan.Add(linkDoc);
-                        linksRelevantes++;
                     }
                 }
-                else
-                {
-                    linksIgnorados++;
-                }
             }
-            sb.AppendLine($"  > Vínculos encontrados: {linksEncontrados} (Cargados)");
-            sb.AppendLine($"  > Vínculos RELEVANTES (misma especialidad '{mainSpecialty}'): {linksRelevantes}");
-            sb.AppendLine($"  > Vínculos Ignorados (otra especialidad): {linksIgnorados}");
-            sb.AppendLine($"  > Total de documentos a escanear (Principal + Vínculos): {docsToScan.Count}");
 
-            // ==========================================================
+            // --- Debug logs retirados ---
+
             // 3. Escanear TODOS los documentos de la lista
-            // (¡MODIFICADO! Usar un Dictionary para guardar el origen del AC)
-            // ==========================================================
             var codesFoundInModel = new Dictionary<string, string>(System.StringComparer.OrdinalIgnoreCase);
             var codesThatNeedSchedule = new Dictionary<string, string>(System.StringComparer.OrdinalIgnoreCase);
             var existingCodesSet = new HashSet<string>(existingScheduleCodes, System.StringComparer.OrdinalIgnoreCase);
@@ -117,18 +101,12 @@ namespace TL60_RevisionDeTablas.Plugins.Tablas
                 string docName = Path.GetFileName(scanDoc.PathName);
                 if (string.IsNullOrEmpty(docName)) docName = "Documento Principal";
 
-                sb.AppendLine($"  --- Escaneando Doc: {docName} ---");
-
                 var elementsCollector = new FilteredElementCollector(scanDoc)
                                         .WherePasses(categoryFilter)
                                         .WhereElementIsNotElementType();
 
-                int elementCount = 0;
-                int acFoundCount = 0;
-
                 foreach (Element elem in elementsCollector.ToElements())
                 {
-                    elementCount++;
                     ElementType type = scanDoc.GetElement(elem.GetTypeId()) as ElementType;
                     if (type == null) continue;
 
@@ -143,35 +121,24 @@ namespace TL60_RevisionDeTablas.Plugins.Tablas
                             var materialCodes = GetMaterialAssemblyCodes(elem, scanDoc);
                             foreach (var matCode in materialCodes)
                             {
-                                // (¡MODIFICADO!) Guardar AC y docName
                                 if (!codesFoundInModel.ContainsKey(matCode))
                                 {
                                     codesFoundInModel.Add(matCode, docName);
-                                    acFoundCount++;
                                 }
                             }
                         }
                         else
                         {
-                            // (¡MODIFICADO!) Guardar AC y docName
                             if (!codesFoundInModel.ContainsKey(assemblyCode))
                             {
                                 codesFoundInModel.Add(assemblyCode, docName);
-                                acFoundCount++;
                             }
                         }
                     }
                 }
-                sb.AppendLine($"  > Elementos analizados: {elementCount}");
-                sb.AppendLine($"  > Assembly Codes únicos (nuevos) encontrados: {acFoundCount}");
             }
-            sb.AppendLine($"  --- Fin del Escaneo ---");
 
-            // ==========================================================
-            // 4. Comparar y Reportar (¡MODIFICADO! Propagar el docName)
-            // ==========================================================
-            sb.AppendLine("  > Comparando AC encontrados con Google Sheets y Tablas Existentes...");
-            int missingCount = 0;
+            // 4. Comparar y Reportar
             foreach (var kvp in codesFoundInModel) // kvp.Key = AC, kvp.Value = docName
             {
                 string code = kvp.Key;
@@ -181,14 +148,10 @@ namespace TL60_RevisionDeTablas.Plugins.Tablas
                 if (metradoType == "REVIT" && !existingCodesSet.Contains(code))
                 {
                     codesThatNeedSchedule.Add(code, sourceDoc); // Guardar AC y docName
-                    missingCount++;
                 }
             }
-            sb.AppendLine($"  > Total de AC 'REVIT' sin tabla: {missingCount}");
 
-            // ==========================================================
-            // 5. Generar el reporte de auditoría (¡MODIFICADO!)
-            // ==========================================================
+            // 5. Generar el reporte de auditoría
             if (codesThatNeedSchedule.Count > 0)
             {
                 var report = new ElementData
@@ -208,9 +171,7 @@ namespace TL60_RevisionDeTablas.Plugins.Tablas
                     report.AuditResults.Add(new AuditItem
                     {
                         AuditType = "TABLA FALTANTE",
-                        // (¡MODIFICADO!) Cambiado de Error a Vacio (Advertencia)
-                        Estado = EstadoParametro.Vacio,
-                        // (¡MODIFICADO!) Nuevo formato de mensaje
+                        Estado = EstadoParametro.Vacio, // Advertencia
                         Mensaje = $"No se encontró tabla para el AC: '{missingCode}' (detectado en el modelo: '{rvtName}')",
                         ValorActual = "No existe",
                         ValorCorregido = $"Crear tabla para {missingCode}",

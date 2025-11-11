@@ -11,7 +11,7 @@ using TL60_RevisionDeTablas.Models;
 using TL60_RevisionDeTablas.Core;
 using TL60_RevisionDeTablas.Plugins.Tablas;
 using TL60_RevisionDeTablas.UI;
-using System.Text;
+// using System.Text; // <--- Retirado
 
 namespace TL60_RevisionDeTablas.Plugins.Tablas
 {
@@ -20,7 +20,7 @@ namespace TL60_RevisionDeTablas.Plugins.Tablas
     public class MainCommand : IExternalCommand
     {
         private const string SPREADSHEET_ID = "14bYBONt68lfM-sx6iIJxkYExXS0u7sdgijEScL3Ed3Y";
-        private const string DEBUG_TARGET_AC = "C.50.08.01.40";
+        // private const string DEBUG_TARGET_AC = "..."; // <--- Retirado
 
         private static readonly List<string> NOMBRES_WIP = new List<string>
         {
@@ -75,40 +75,27 @@ namespace TL60_RevisionDeTablas.Plugins.Tablas
             UIDocument uidoc = uiapp.ActiveUIDocument;
             Document doc = uidoc.Document;
 
-            // Logger para Debug
-            StringBuilder sb = new StringBuilder();
-            sb.AppendLine($"--- DEBUG REAL DE 'MainCommand' ---");
-            sb.AppendLine($"Fecha: {DateTime.Now.ToString("g")}\n");
-            sb.AppendLine($"Assembly Code objetivo (para tracking): {DEBUG_TARGET_AC}\n");
+            // --- Debug Logger Retirado ---
 
             try
             {
                 // 1. Inicializar Servicios
-                sb.AppendLine("PASO 1: Inicializando Servicios...");
                 var sheetsService = new GoogleSheetsService();
                 string docTitle = Path.GetFileNameWithoutExtension(doc.Title);
-                sb.AppendLine($"  > Título del Documento: {docTitle}");
 
                 var uniclassService = new UniclassDataService(sheetsService, docTitle);
                 uniclassService.LoadClassificationData(SPREADSHEET_ID);
-                sb.AppendLine("  > UniclassDataService cargado.");
-
-                string metradoType = uniclassService.GetScheduleType(DEBUG_TARGET_AC);
-                sb.AppendLine($"  > [Debug G-Sheets] Resultado para '{DEBUG_TARGET_AC}': '{metradoType}'");
 
                 var processor = new ScheduleProcessor(doc, sheetsService, uniclassService, SPREADSHEET_ID);
-                sb.AppendLine("  > ScheduleProcessor inicializado.");
 
                 var elementosData = new List<ElementData>();
                 var existingMetradoCodes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
                 // 2. Obtener todas las tablas
-                sb.AppendLine("\nPASO 2: Recorriendo Tablas de Planificación...");
                 var allSchedules = new FilteredElementCollector(doc)
                     .OfCategory(BuiltInCategory.OST_Schedules)
                     .WhereElementIsNotElementType()
                     .Cast<ViewSchedule>();
-                sb.AppendLine($"  > Total de tablas (ViewSchedule) encontradas: {allSchedules.Count()}");
 
                 // 3. Procesar Tablas de Planificación (Lógica existente)
                 foreach (ViewSchedule view in allSchedules)
@@ -159,68 +146,57 @@ namespace TL60_RevisionDeTablas.Plugins.Tablas
                     }
                 }
 
-                sb.AppendLine($"  > Total de Tablas de Metrado (C./C.) añadidas a 'existingMetradoCodes': {existingMetradoCodes.Count}");
-                bool scheduleExists = existingMetradoCodes.Contains(DEBUG_TARGET_AC);
-                sb.AppendLine($"  > [Debug Tablas] ¿La tabla para '{DEBUG_TARGET_AC}' existe en 'existingMetradoCodes'? {scheduleExists.ToString().ToUpper()}");
+                // --- Debug logs de Paso 2 retirados ---
 
                 // ==========================================================
                 // ===== 4. EJECUTAR AUDITORÍA DE ELEMENTOS (Tablas Faltantes)
                 // ==========================================================
-                sb.AppendLine("\nPASO 3: Ejecutando Auditoría de Elementos (MissingScheduleAuditor)...");
 
                 if (_categoriesToAudit.Count > 0)
                 {
-                    sb.AppendLine($"  > Auditoría activada para {_categoriesToAudit.Count} categorías.");
                     var elementAuditor = new MissingScheduleAuditor(doc, uniclassService);
 
+                    // (¡MODIFICADO!) Llamada limpia sin el logger 'sb'
                     ElementData missingSchedulesReport = elementAuditor.FindMissingSchedules(
                         existingMetradoCodes,
-                        _categoriesToAudit,
-                        sb);
+                        _categoriesToAudit);
 
                     if (missingSchedulesReport != null)
                     {
-                        sb.AppendLine("  > ¡ÉXITO! 'MissingScheduleAuditor' SÍ devolvió un informe (missingSchedulesReport no es nulo).");
-                        sb.AppendLine($"  > El informe contiene {missingSchedulesReport.AuditResults.Count} errores.");
                         elementosData.Add(missingSchedulesReport);
-
-                        bool foundInReport = missingSchedulesReport.AuditResults.Any(a => a.Mensaje.Contains(DEBUG_TARGET_AC));
-                        sb.AppendLine($"  > [Debug Auditor] ¿El informe devuelto contiene el AC '{DEBUG_TARGET_AC}'? {foundInReport.ToString().ToUpper()}");
-                    }
-                    else
-                    {
-                        sb.AppendLine("  > 'MissingScheduleAuditor' devolvió NULL (no encontró tablas faltantes).");
                     }
                 }
                 else
                 {
-                    sb.AppendLine("  > ¡ADVERTENCIA! La auditoría de elementos no se ejecutó porque '_categoriesToAudit' está vacía.");
-                    // ... (añadir advertencia) ...
+                    // ... (Advertencia de auditoría no configurada) ...
+                    elementosData.Add(new ElementData
+                    {
+                        ElementId = ElementId.InvalidElementId,
+                        Nombre = "Auditoría de Elementos",
+                        Categoria = "Sistema",
+                        DatosCompletos = false,
+                        AuditResults = new List<AuditItem>
+                        {
+                            new AuditItem
+                            {
+                                AuditType = "CONFIGURACIÓN",
+                                Estado = EstadoParametro.Vacio,
+                                Mensaje = "La auditoría de elementos modelados (Tablas Faltantes) no está configurada. " +
+                                          "Se debe definir la lista de categorías a revisar en MainCommand.cs."
+                            }
+                        }
+                    });
                 }
 
                 // 5. POST-PROCESO: Auditoría de Duplicados
-                sb.AppendLine("\nPASO 4: Ejecutando 'RunDuplicateCheck'...");
                 RunDuplicateCheck(elementosData);
-                sb.AppendLine("  > 'RunDuplicateCheck' completado.");
 
                 // 6. Construir datos de diagnóstico
-                sb.AppendLine("\nPASO 5: Construyendo 'DiagnosticDataBuilder'...");
                 var diagnosticBuilder = new DiagnosticDataBuilder();
                 List<DiagnosticRow> diagnosticRows = diagnosticBuilder.BuildDiagnosticRows(elementosData);
-                sb.AppendLine($"  > 'DiagnosticDataBuilder' completado. Total de filas generadas: {diagnosticRows.Count}");
 
-                bool foundInFinalRows = diagnosticRows.Any(r => r.NombreParametro == "TABLA FALTANTE" && r.Mensaje.Contains(DEBUG_TARGET_AC));
-                sb.AppendLine($"  > [Debug Final] ¿Filas de diagnóstico finales contienen el error '{DEBUG_TARGET_AC}'? {foundInFinalRows.ToString().ToUpper()}");
-
-                // Guardar el Log y Mostrar la UI
-                try
-                {
-                    string desktopPath = Environment.GetFolderPath(Environment.SpecialFolder.Desktop);
-                    string filePath = Path.Combine(desktopPath, "Debug_MainCommand_Log.txt");
-                    File.WriteAllText(filePath, sb.ToString());
-                    TaskDialog.Show("Debug Log Generado", $"Se ha guardado el log de ejecución real en tu Escritorio:\n\n{filePath}");
-                }
-                catch { }
+                // --- Debug logs de Paso 5 retirados ---
+                // --- Bloque de guardado de log retirado ---
 
                 // 7. Preparar los Writers Asíncronos
                 var writerAsync = new ScheduleUpdateAsync();
@@ -240,27 +216,14 @@ namespace TL60_RevisionDeTablas.Plugins.Tablas
             }
             catch (Exception ex)
             {
-                // ... (Manejo de errores y guardado de log sin cambios) ...
                 message = $"Error: {ex.Message}\nStackTrace: {ex.StackTrace}";
                 TaskDialog.Show("Error", message);
-                sb.AppendLine($"\n\n--- ¡ERROR CATASTRÓFICO! ---");
-                sb.AppendLine(ex.Message);
-                sb.AppendLine(ex.StackTrace);
-                try
-                {
-                    string desktopPath = Environment.GetFolderPath(Environment.SpecialFolder.Desktop);
-                    string filePath = Path.Combine(desktopPath, "Debug_MainCommand_Log_ERROR.txt");
-                    File.WriteAllText(filePath, sb.ToString());
-                    TaskDialog.Show("Error Fatal", $"Se ha guardado el log de error en tu Escritorio:\n\n{filePath}");
-                }
-                catch { }
-
+                // --- Bloque de guardado de log de error retirado ---
                 return Result.Failed;
             }
         }
 
         /// <summary>
-        /// (¡ESTE MÉTODO ES LA CORRECCIÓN!)
         /// Ejecuta la auditoría de duplicados
         /// </summary>
         private void RunDuplicateCheck(List<ElementData> elementosData)
@@ -271,8 +234,7 @@ namespace TL60_RevisionDeTablas.Plugins.Tablas
                 .ToList();
 
             // 2. Agrupar por Assembly Code
-            // (¡CORRECCIÓN! Arreglado el typo de 'CodigoIdent' a 'CodigoIdentificacion')
-            var groupedByAC = metradosTablas.GroupBy(ed => ed.CodigoIdentificacion); // <--- (Línea 269 aprox)
+            var groupedByAC = metradosTablas.GroupBy(ed => ed.CodigoIdentificacion);
 
             foreach (var acGroup in groupedByAC)
             {

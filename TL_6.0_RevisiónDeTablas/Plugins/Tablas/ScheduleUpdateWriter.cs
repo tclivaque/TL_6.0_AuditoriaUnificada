@@ -9,14 +9,11 @@ namespace TL60_RevisionDeTablas.Plugins.Tablas
 {
     public class ScheduleUpdateWriter
     {
-        // ==========================================================
-        // ===== (¡CORRECCIÓN!) CAMPO Y CONSTRUCTOR REINSERTADOS
-        // ==========================================================
         private readonly Document _doc;
 
         public ScheduleUpdateWriter(Document doc)
         {
-            _doc = doc; // <--- (Línea 16)
+            _doc = doc;
         }
 
         public ProcessingResult UpdateSchedules(List<ElementData> elementosData)
@@ -32,7 +29,7 @@ namespace TL60_RevisionDeTablas.Plugins.Tablas
             int columnasOcultadas = 0;
             int parcialCorregidos = 0;
 
-            using (Transaction trans = new Transaction(_doc, "Corregir Auditoría de Tablas")) // <--- (Línea 32)
+            using (Transaction trans = new Transaction(_doc, "Corregir Auditoría de Tablas"))
             {
                 try
                 {
@@ -43,13 +40,13 @@ namespace TL60_RevisionDeTablas.Plugins.Tablas
                         if (elementData.ElementId == null || elementData.ElementId == ElementId.InvalidElementId)
                             continue;
 
-                        ViewSchedule view = _doc.GetElement(elementData.ElementId) as ViewSchedule; // <--- (Línea 43)
+                        ViewSchedule view = _doc.GetElement(elementData.ElementId) as ViewSchedule;
                         if (view == null) continue;
 
                         ScheduleDefinition definition = view.Definition;
                         bool tablaModificada = false;
 
-                        // ... (Lógica de corrección 1: VIEW NAME) ...
+                        // --- 1. Ejecutar RENOMBRADO DE TABLA (VIEW NAME) ---
                         var viewNameAudit = elementData.AuditResults.FirstOrDefault(a => a.AuditType == "VIEW NAME" && a.IsCorrectable);
                         if (viewNameAudit != null)
                         {
@@ -69,7 +66,7 @@ namespace TL60_RevisionDeTablas.Plugins.Tablas
                             }
                         }
 
-                        // ... (Lógica de corrección 2: CLASIFICACIÓN) ...
+                        // --- 2. Ejecutar RENOMBRADO DE CLASIFICACIÓN (WIP, MANUAL, SOPORTE, COPIA) ---
                         var renameAudit = elementData.AuditResults.FirstOrDefault(a =>
                             (a.AuditType.StartsWith("CLASIFICACIÓN") || a.AuditType == "MANUAL" || a.AuditType == "COPIA")
                             && a.IsCorrectable);
@@ -83,7 +80,7 @@ namespace TL60_RevisionDeTablas.Plugins.Tablas
                             }
                         }
 
-                        // ... (Lógica de corrección 3: FILTRO) ...
+                        // --- 3. Corregir FILTROS ---
                         var filterAudit = elementData.AuditResults.FirstOrDefault(a => a.AuditType == "FILTRO" && a.IsCorrectable);
                         if (filterAudit != null)
                         {
@@ -95,7 +92,7 @@ namespace TL60_RevisionDeTablas.Plugins.Tablas
                             }
                         }
 
-                        // ... (Lógica de corrección 4: CONTENIDO) ...
+                        // --- 4. Corregir CONTENIDO (Itemize) ---
                         var contentAudit = elementData.AuditResults.FirstOrDefault(a => a.AuditType == "CONTENIDO" && a.IsCorrectable);
                         if (contentAudit != null)
                         {
@@ -107,7 +104,7 @@ namespace TL60_RevisionDeTablas.Plugins.Tablas
                             }
                         }
 
-                        // ... (Lógica de corrección 5: LINKS) ...
+                        // --- 5. Corregir INCLUDE LINKS ---
                         var linksAudit = elementData.AuditResults.FirstOrDefault(a => a.AuditType == "LINKS" && a.IsCorrectable);
                         if (linksAudit != null)
                         {
@@ -119,10 +116,11 @@ namespace TL60_RevisionDeTablas.Plugins.Tablas
                             }
                         }
 
-                        // ... (Lógica de corrección 6: COLUMNAS) ...
+                        // --- 6. Corregir COLUMNAS (Renombrar u Ocultar) ---
                         var columnAudit = elementData.AuditResults.FirstOrDefault(a => a.AuditType == "COLUMNAS" && a.IsCorrectable);
                         if (columnAudit != null && columnAudit.Tag != null)
                         {
+                            // CASO A: Renombrar (El Tag es un Diccionario)
                             if (columnAudit.Tag is Dictionary<ScheduleField, string> headingsToFix)
                             {
                                 if (WriteHeadings(headingsToFix, result.Errores, elementData.Nombre))
@@ -131,6 +129,7 @@ namespace TL60_RevisionDeTablas.Plugins.Tablas
                                     tablaModificada = true;
                                 }
                             }
+                            // CASO B: Ocultar (El Tag es una Lista)
                             else if (columnAudit.Tag is List<ScheduleField> fieldsToHide)
                             {
                                 if (HideColumns(fieldsToHide, result.Errores, elementData.Nombre))
@@ -141,7 +140,9 @@ namespace TL60_RevisionDeTablas.Plugins.Tablas
                             }
                         }
 
-                        // ... (Lógica de corrección 7: FORMATO PARCIAL (Corregido)) ...
+                        // ==========================================================
+                        // ===== 7. (¡MODIFICADO!) Corregir FORMATO PARCIAL
+                        // ==========================================================
                         var parcialAudit = elementData.AuditResults.FirstOrDefault(a => a.AuditType == "FORMATO PARCIAL" && a.IsCorrectable);
                         if (parcialAudit != null && parcialAudit.Tag is ScheduleFieldId)
                         {
@@ -155,7 +156,10 @@ namespace TL60_RevisionDeTablas.Plugins.Tablas
                                     FormatOptions options = field.GetFormatOptions();
 
                                     options.UseDefault = false;
-                                    options.SetSymbolTypeId(new ForgeTypeId()); // <-- Corrección para "None"
+                                    options.SetSymbolTypeId(new ForgeTypeId()); // <-- Fija "Unit symbol: None"
+
+                                    // (¡NUEVA LÍNEA AÑADIDA!)
+                                    options.Accuracy = 0.01; // <-- Fija "Rounding: 2 decimal places"
 
                                     field.SetFormatOptions(options);
 
@@ -169,6 +173,7 @@ namespace TL60_RevisionDeTablas.Plugins.Tablas
                             }
                         }
 
+
                         if (tablaModificada)
                         {
                             tablasCorregidas++;
@@ -178,6 +183,7 @@ namespace TL60_RevisionDeTablas.Plugins.Tablas
                     trans.Commit();
                     result.Exitoso = true;
 
+                    // Mensaje de éxito actualizado
                     result.Mensaje = $"Corrección completa.\n\n" +
                                      $"Tablas únicas modificadas: {tablasCorregidas}\n\n" +
                                      $"Detalles:\n" +
@@ -201,7 +207,6 @@ namespace TL60_RevisionDeTablas.Plugins.Tablas
             return result;
         }
 
-        // ... (Todos los métodos privados: RenameAndReclassify, WriteHeadings, etc. van aquí) ...
         private bool RenameAndReclassify(ViewSchedule view, RenamingJobData jobData, List<string> errores)
         {
             try
@@ -331,6 +336,7 @@ namespace TL60_RevisionDeTablas.Plugins.Tablas
 
         private ScheduleField FindField(ScheduleDefinition definition, string fieldName)
         {
+            // Búsqueda robusta que ignora prefijos
             for (int i = 0; i < definition.GetFieldCount(); i++)
             {
                 var field = definition.GetField(i);
@@ -342,6 +348,7 @@ namespace TL60_RevisionDeTablas.Plugins.Tablas
                 }
             }
 
+            // Fallback para campos sin prefijo (ej. "EMPRESA" si se añade nuevo)
             for (int i = 0; i < definition.GetFieldCount(); i++)
             {
                 var field = definition.GetField(i);

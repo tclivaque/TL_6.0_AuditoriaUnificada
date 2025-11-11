@@ -2,15 +2,14 @@
 using Autodesk.Revit.DB;
 using System.Collections.Generic;
 using System.Linq;
+using System;
 using TL60_RevisionDeTablas.Core;
 using TL60_RevisionDeTablas.Models;
+using System.Text;
+using System.IO;
 
 namespace TL60_RevisionDeTablas.Plugins.Tablas
 {
-    /// <summary>
-    /// Audita los elementos modelados para encontrar Assembly Codes
-    /// que deberían tener tablas ("REVIT") pero no la tienen.
-    /// </summary>
     public class MissingScheduleAuditor
     {
         private readonly Document _doc;
@@ -22,93 +21,197 @@ namespace TL60_RevisionDeTablas.Plugins.Tablas
             _uniclassService = uniclassService;
         }
 
-        /// <summary>
-        /// Busca tablas faltantes y devuelve un ElementData "dummy" con los errores.
-        /// </summary>
         public ElementData FindMissingSchedules(
             IEnumerable<string> existingScheduleCodes,
-            List<BuiltInCategory> categoriesToAudit)
+            List<BuiltInCategory> categoriesToAudit,
+            StringBuilder sb)
         {
-            var codesFoundInModel = new HashSet<string>(System.StringComparer.OrdinalIgnoreCase);
-            var codesThatNeedSchedule = new HashSet<string>(System.StringComparer.OrdinalIgnoreCase);
+            sb.AppendLine("  --- Debugging MissingScheduleAuditor ---");
 
-            var existingCodesSet = new HashSet<string>(existingScheduleCodes, System.StringComparer.OrdinalIgnoreCase);
-
-            // 1. Construir el filtro de categorías
-            // Si la lista está vacía, no se auditará nada.
-            if (categoriesToAudit == null || categoriesToAudit.Count == 0)
+            // 1. Obtener Especialidad del Documento Principal
+            string mainDocTitle = Path.GetFileNameWithoutExtension(_doc.Title);
+            string mainSpecialty = "UNKNOWN_SPECIALTY";
+            try
             {
-                return null; // No hay nada que auditar
+                var parts = mainDocTitle.Split('-');
+                if (parts.Length > 3)
+                {
+                    mainSpecialty = parts[3];
+                }
+                sb.AppendLine($"  > Especialidad del Doc. Principal: '{mainSpecialty}' (de '{mainDocTitle}')");
             }
+            catch (Exception ex)
+            {
+                sb.AppendLine($"  > ADVERTENCIA: No se pudo extraer especialidad de '{mainDocTitle}': {ex.Message}");
+            }
+
+            // 2. Obtener lista de TODOS los documentos a escanear (Principal + Vínculos)
+            List<Document> docsToScan = new List<Document>();
+            docsToScan.Add(_doc);
+            sb.AppendLine("  > Documento principal añadido a la cola de escaneo.");
+
+            sb.AppendLine("  > Buscando Vínculos (Revit Links) relevantes...");
+            var linkInstances = new FilteredElementCollector(_doc)
+                .OfClass(typeof(RevitLinkInstance))
+                .Cast<RevitLinkInstance>();
+
+            int linksEncontrados = 0;
+            int linksIgnorados = 0;
+            int linksRelevantes = 0;
+
+            foreach (var linkInstance in linkInstances)
+            {
+                Document linkDoc = linkInstance.GetLinkDocument();
+                if (linkDoc == null) continue;
+
+                linksEncontrados++;
+                RevitLinkType linkType = _doc.GetElement(linkInstance.GetTypeId()) as RevitLinkType;
+                if (linkType == null) continue;
+
+                string linkName = linkType.Name;
+                string linkSpecialty = "UNKNOWN_LINK_SPECIALTY";
+
+                try
+                {
+                    var parts = Path.GetFileNameWithoutExtension(linkName).Split('-');
+                    if (parts.Length > 3)
+                    {
+                        linkSpecialty = parts[3];
+                    }
+                }
+                catch
+                {
+                    sb.AppendLine($"    > Vínculo '{linkName}' tiene nombre no estándar.");
+                    continue;
+                }
+
+                if (linkSpecialty.Equals(mainSpecialty, StringComparison.OrdinalIgnoreCase))
+                {
+                    if (!docsToScan.Contains(linkDoc))
+                    {
+                        docsToScan.Add(linkDoc);
+                        linksRelevantes++;
+                    }
+                }
+                else
+                {
+                    linksIgnorados++;
+                }
+            }
+            sb.AppendLine($"  > Vínculos encontrados: {linksEncontrados} (Cargados)");
+            sb.AppendLine($"  > Vínculos RELEVANTES (misma especialidad '{mainSpecialty}'): {linksRelevantes}");
+            sb.AppendLine($"  > Vínculos Ignorados (otra especialidad): {linksIgnorados}");
+            sb.AppendLine($"  > Total de documentos a escanear (Principal + Vínculos): {docsToScan.Count}");
+
+            // ==========================================================
+            // 3. Escanear TODOS los documentos de la lista
+            // (¡MODIFICADO! Usar un Dictionary para guardar el origen del AC)
+            // ==========================================================
+            var codesFoundInModel = new Dictionary<string, string>(System.StringComparer.OrdinalIgnoreCase);
+            var codesThatNeedSchedule = new Dictionary<string, string>(System.StringComparer.OrdinalIgnoreCase);
+            var existingCodesSet = new HashSet<string>(existingScheduleCodes, System.StringComparer.OrdinalIgnoreCase);
             var categoryFilter = new ElementMulticategoryFilter(categoriesToAudit);
 
-            // 2. Recolectar elementos y sus Assembly Codes
-            var collector = new FilteredElementCollector(_doc);
-            var elements = collector.WherePasses(categoryFilter).WhereElementIsNotElementType();
-
-            foreach (Element elem in elements)
+            foreach (Document scanDoc in docsToScan)
             {
-                ElementType type = _doc.GetElement(elem.GetTypeId()) as ElementType;
-                if (type == null) continue;
+                string docName = Path.GetFileName(scanDoc.PathName);
+                if (string.IsNullOrEmpty(docName)) docName = "Documento Principal";
 
-                // Lógica de Assembly Code (Tipo)
-                Parameter acParam = type.LookupParameter("Assembly Code");
-                string assemblyCode = acParam?.AsString();
+                sb.AppendLine($"  --- Escaneando Doc: {docName} ---");
 
-                if (!string.IsNullOrWhiteSpace(assemblyCode) &&
-                    assemblyCode.StartsWith("C.", System.StringComparison.OrdinalIgnoreCase))
+                var elementsCollector = new FilteredElementCollector(scanDoc)
+                                        .WherePasses(categoryFilter)
+                                        .WhereElementIsNotElementType();
+
+                int elementCount = 0;
+                int acFoundCount = 0;
+
+                foreach (Element elem in elementsCollector.ToElements())
                 {
-                    // CASO A: El AC del tipo es "TAKEOFF" -> Buscar en Material
-                    if (assemblyCode.ToUpper().Contains("TAKEOFF"))
+                    elementCount++;
+                    ElementType type = scanDoc.GetElement(elem.GetTypeId()) as ElementType;
+                    if (type == null) continue;
+
+                    Parameter acParam = type.LookupParameter("Assembly Code");
+                    string assemblyCode = acParam?.AsString();
+
+                    if (!string.IsNullOrWhiteSpace(assemblyCode) &&
+                        assemblyCode.StartsWith("C.", System.StringComparison.OrdinalIgnoreCase))
                     {
-                        var materialCodes = GetMaterialAssemblyCodes(elem);
-                        foreach (var matCode in materialCodes)
+                        if (assemblyCode.ToUpper().Contains("TAKEOFF"))
                         {
-                            codesFoundInModel.Add(matCode);
+                            var materialCodes = GetMaterialAssemblyCodes(elem, scanDoc);
+                            foreach (var matCode in materialCodes)
+                            {
+                                // (¡MODIFICADO!) Guardar AC y docName
+                                if (!codesFoundInModel.ContainsKey(matCode))
+                                {
+                                    codesFoundInModel.Add(matCode, docName);
+                                    acFoundCount++;
+                                }
+                            }
+                        }
+                        else
+                        {
+                            // (¡MODIFICADO!) Guardar AC y docName
+                            if (!codesFoundInModel.ContainsKey(assemblyCode))
+                            {
+                                codesFoundInModel.Add(assemblyCode, docName);
+                                acFoundCount++;
+                            }
                         }
                     }
-                    // CASO B: El AC del tipo es normal
-                    else
-                    {
-                        codesFoundInModel.Add(assemblyCode);
-                    }
                 }
+                sb.AppendLine($"  > Elementos analizados: {elementCount}");
+                sb.AppendLine($"  > Assembly Codes únicos (nuevos) encontrados: {acFoundCount}");
             }
+            sb.AppendLine($"  --- Fin del Escaneo ---");
 
-            // 3. Comparar códigos del modelo con la base de datos de Uniclass
-            foreach (string code in codesFoundInModel)
+            // ==========================================================
+            // 4. Comparar y Reportar (¡MODIFICADO! Propagar el docName)
+            // ==========================================================
+            sb.AppendLine("  > Comparando AC encontrados con Google Sheets y Tablas Existentes...");
+            int missingCount = 0;
+            foreach (var kvp in codesFoundInModel) // kvp.Key = AC, kvp.Value = docName
             {
+                string code = kvp.Key;
+                string sourceDoc = kvp.Value;
                 string metradoType = _uniclassService.GetScheduleType(code);
 
-                // Si es "REVIT" y NO existe una tabla para él...
                 if (metradoType == "REVIT" && !existingCodesSet.Contains(code))
                 {
-                    codesThatNeedSchedule.Add(code);
+                    codesThatNeedSchedule.Add(code, sourceDoc); // Guardar AC y docName
+                    missingCount++;
                 }
             }
+            sb.AppendLine($"  > Total de AC 'REVIT' sin tabla: {missingCount}");
 
-            // 4. Generar el reporte de auditoría
+            // ==========================================================
+            // 5. Generar el reporte de auditoría (¡MODIFICADO!)
+            // ==========================================================
             if (codesThatNeedSchedule.Count > 0)
             {
-                // Crear un "ElementData" virtual para reportar errores
                 var report = new ElementData
                 {
-                    ElementId = ElementId.InvalidElementId, // No representa un elemento real
-                    Nombre = "Auditoría de Elementos Modelados",
+                    ElementId = ElementId.InvalidElementId,
+                    Nombre = "Auditoría de Elementos (Principal + Vínculos)",
                     Categoria = "Sistema",
                     CodigoIdentificacion = "N/A",
                     DatosCompletos = false
                 };
 
-                foreach (string missingCode in codesThatNeedSchedule.OrderBy(c => c))
+                foreach (var missingItem in codesThatNeedSchedule.OrderBy(kvp => kvp.Key))
                 {
+                    string missingCode = missingItem.Key;
+                    string rvtName = missingItem.Value;
+
                     report.AuditResults.Add(new AuditItem
                     {
                         AuditType = "TABLA FALTANTE",
-                        Estado = EstadoParametro.Error,
-                        Mensaje = $"El Assembly Code '{missingCode}' está asignado a elementos, " +
-                                  "está marcado como 'REVIT' en Google Sheets, " +
-                                  "pero no se encontró ninguna tabla de planificación para él.",
+                        // (¡MODIFICADO!) Cambiado de Error a Vacio (Advertencia)
+                        Estado = EstadoParametro.Vacio,
+                        // (¡MODIFICADO!) Nuevo formato de mensaje
+                        Mensaje = $"No se encontró tabla para el AC: '{missingCode}' (detectado en el modelo: '{rvtName}')",
                         ValorActual = "No existe",
                         ValorCorregido = $"Crear tabla para {missingCode}",
                         IsCorrectable = false
@@ -120,17 +223,14 @@ namespace TL60_RevisionDeTablas.Plugins.Tablas
             return null; // No se encontraron errores
         }
 
-        /// <summary>
-        /// Obtiene los "MATERIAL_ASSEMBLY CODE" de un elemento.
-        /// </summary>
-        private IEnumerable<string> GetMaterialAssemblyCodes(Element elem)
+        private IEnumerable<string> GetMaterialAssemblyCodes(Element elem, Document doc)
         {
             var codes = new HashSet<string>(System.StringComparer.OrdinalIgnoreCase);
             var materialIds = elem.GetMaterialIds(false);
 
             foreach (ElementId matId in materialIds)
             {
-                Material material = _doc.GetElement(matId) as Material;
+                Material material = doc.GetElement(matId) as Material;
                 if (material == null) continue;
 
                 Parameter matAcParam = material.LookupParameter("MATERIAL_ASSEMBLY CODE");

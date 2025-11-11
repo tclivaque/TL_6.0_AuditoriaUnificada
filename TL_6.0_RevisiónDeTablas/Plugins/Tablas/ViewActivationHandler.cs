@@ -1,9 +1,11 @@
-﻿using Autodesk.Revit.DB;
+﻿// Plugins/Tablas/ViewActivationHandler.cs
+using Autodesk.Revit.DB;
 using Autodesk.Revit.UI;
 using System;
 using System.Threading;
 
-namespace TL60_RevisionDeTablas.Services
+// (¡ESTA ES LA LÍNEA CORREGIDA!)
+namespace TL60_RevisionDeTablas.Plugins.Tablas
 {
     /// <summary>
     /// Maneja la activación de una vista (abrir tabla) usando ExternalEvent

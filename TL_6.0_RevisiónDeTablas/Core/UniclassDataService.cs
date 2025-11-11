@@ -2,14 +2,12 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using TL60_RevisionDeTablas.Services;
 
 namespace TL60_RevisionDeTablas.Core
 {
     /// <summary>
     /// Servicio compartido para leer la "Matriz UniClass" desde Google Sheets.
     /// Centraliza la lógica de qué Assembly Code es "REVIT" o "MANUAL".
-    /// Reemplaza a ManualScheduleService.
     /// </summary>
     public class UniclassDataService
     {
@@ -20,8 +18,8 @@ namespace TL60_RevisionDeTablas.Core
         private const string SHEET_ACTIVO = "Matriz UniClass - ACTIVO";
         private const string SHEET_SITIO = "Matriz UniClass - SITIO";
 
-        // Códigos de proyecto que SÓLO leen de SITIO
-        private readonly List<string> _sitioOnlyCodes = new List<string>
+        // (¡MODIFICADO!) Esta lista ahora define los que leen "ACTIVO"
+        private readonly List<string> _activoReadCodes = new List<string>
         {
             "469", "470", "471", "472", "473", "474", "475", "476",
             "477", "478", "479", "480", "455", "456"
@@ -43,19 +41,27 @@ namespace TL60_RevisionDeTablas.Core
         {
             var sheetsToRead = new List<string>();
 
-            if (_sitioOnlyCodes.Any(code => _docTitle.Contains(code)))
+            // ==========================================================
+            // ===== (¡LÓGICA INVERTIDA SEGÚN TU REQUERIMIENTO!) =====
+            // ==========================================================
+
+            // Regla 2: Si es el código dual, lee AMBAS
+            if (_docTitle.Contains(_dualReadCode))
             {
-                sheetsToRead.Add(SHEET_SITIO);
+                sheetsToRead.Add(SHEET_ACTIVO);
+                sheetsToRead.Add(SHEET_SITIO); // SITIO al final para sobrescribir duplicados si es necesario
             }
-            else if (_docTitle.Contains(_dualReadCode))
+            // Regla 1: Si contiene "469", "470", etc., lee SOLO ACTIVO
+            else if (_activoReadCodes.Any(code => _docTitle.Contains(code)))
             {
-                sheetsToRead.Add(SHEET_SITIO);
                 sheetsToRead.Add(SHEET_ACTIVO);
             }
+            // Regla 3 (Default): Todos los demás casos, leen SOLO SITIO
             else
             {
-                sheetsToRead.Add(SHEET_ACTIVO); // Default
+                sheetsToRead.Add(SHEET_SITIO);
             }
+            // ==========================================================
 
             foreach (var sheetName in sheetsToRead)
             {
@@ -63,11 +69,15 @@ namespace TL60_RevisionDeTablas.Core
                 {
                     // Leer rango D:L (Col D=AC, Col L=Tipo)
                     var data = _sheetsService.ReadData(spreadsheetId, $"'{sheetName}'!D:L");
-                    if (data == null || data.Count <= 1) continue;
+                    if (data == null || data.Count <= 1)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"WARN: No se encontraron datos en {sheetName}");
+                        continue;
+                    }
 
                     foreach (var row in data.Skip(1))
                     {
-                        if (row.Count < 9) continue; // Asegurar que la fila llega hasta la Col L
+                        if (row.Count < 9) continue; // Asegurar que la fila llega hasta la Col L (índice 8)
 
                         string assemblyCode = GoogleSheetsService.GetCellValue(row, 0); // Col D (Índice 0 en rango D:L)
                         string metradoType = GoogleSheetsService.GetCellValue(row, 8); // Col L (Índice 8 en rango D:L)
@@ -76,12 +86,12 @@ namespace TL60_RevisionDeTablas.Core
                             continue;
 
                         // Almacenar el tipo. Si está vacío, se asume "REVIT".
+                        // Si ya existe (de ACTIVO), será sobrescrito (por SITIO)
                         _classificationCache[assemblyCode.Trim()] = string.IsNullOrWhiteSpace(metradoType) ? "REVIT" : metradoType.Trim();
                     }
                 }
                 catch (Exception ex)
                 {
-                    // No lanzar excepción, solo registrar y continuar.
                     System.Diagnostics.Debug.WriteLine($"Error al leer {sheetName}: {ex.Message}");
                 }
             }
@@ -94,17 +104,17 @@ namespace TL60_RevisionDeTablas.Core
         public string GetScheduleType(string assemblyCode)
         {
             if (string.IsNullOrWhiteSpace(assemblyCode))
-                return "DESCONOCIDO"; // No se puede determinar
+                return "DESCONOCIDO";
 
             if (_classificationCache.TryGetValue(assemblyCode.Trim(), out string type))
             {
                 if (type.Equals("MANUAL", StringComparison.OrdinalIgnoreCase))
                     return "MANUAL";
 
-                return "REVIT"; // Incluye "REVIT" y cualquier otro valor no vacío
+                return "REVIT";
             }
 
-            return "DESCONOCIDO"; // No se encontró en la base de datos
+            return "DESCONOCIDO";
         }
     }
 }

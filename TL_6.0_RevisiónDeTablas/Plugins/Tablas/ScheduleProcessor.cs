@@ -11,9 +11,6 @@ namespace TL60_RevisionDeTablas.Plugins.Tablas
 {
     public class ScheduleProcessor
     {
-        // ==========================================================
-        // ===== (¡CORRECCIÓN!) CAMPOS DE CLASE REINSERTADOS
-        // ==========================================================
         private readonly Document _doc;
         private readonly GoogleSheetsService _sheetsService;
         private readonly UniclassDataService _uniclassService;
@@ -50,8 +47,6 @@ namespace TL60_RevisionDeTablas.Plugins.Tablas
             "200114-CCC02-MO-ES-047900", "200114-CCC02-MO-ES-048000",
             "200114-CCC02-MO-ES-000410"
         };
-
-        // (¡CORRECCIÓN! Este campo faltaba)
         private readonly Dictionary<string, string> _aliasEncabezados = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
         {
             { "DIGO", "CODIGO" }, { "DESCRIP", "DESCRIPCION" }, { "ACTIV", "ACTIVO" },
@@ -60,8 +55,6 @@ namespace TL60_RevisionDeTablas.Plugins.Tablas
             { "ID DE ELEMENTO", "ID" },
             { "ID", "ID" }
         };
-
-        // (¡CORRECCIÓN! Este campo faltaba)
         private readonly List<string> _baseExpectedHeadings = new List<string>
         {
             "CODIGO", "DESCRIPCION", "ACTIVO", "MODULO", "NIVEL",
@@ -71,7 +64,6 @@ namespace TL60_RevisionDeTablas.Plugins.Tablas
         private const int _expectedHeadingCount = 9;
 
 
-        // (Constructor de 4 argumentos, al que MainCommand llama)
         public ScheduleProcessor(Document doc, GoogleSheetsService sheetsService, UniclassDataService uniclassService, string spreadsheetId)
         {
             _doc = doc ?? throw new ArgumentNullException(nameof(doc));
@@ -106,7 +98,6 @@ namespace TL60_RevisionDeTablas.Plugins.Tablas
             }
         }
 
-        // (Este método es PÚBLICO y SÍ existe)
         public ElementData ProcessSingleElement(ViewSchedule view, string assemblyCode)
         {
             var elementData = new ElementData
@@ -126,7 +117,7 @@ namespace TL60_RevisionDeTablas.Plugins.Tablas
             var auditColumns = ProcessColumns(view);
             var auditContent = ProcessContent(definition);
             var auditLinks = ProcessIncludeLinks(definition);
-            var auditParcial = ProcessParcialFormat(definition);
+            var auditParcial = ProcessParcialFormat(definition); // <-- Modificado
 
             elementData.AuditResults.Add(auditViewName);
             elementData.AuditResults.Add(auditFilter);
@@ -158,8 +149,6 @@ namespace TL60_RevisionDeTablas.Plugins.Tablas
 
             return elementData;
         }
-
-        // ... (Todos los métodos de auditoría privados: ProcessViewName, ProcessFilters, etc. van aquí) ...
 
         #region Auditoría 1: VIEW NAME
         private AuditItem ProcessViewName(ViewSchedule view, string assemblyCode)
@@ -568,6 +557,7 @@ namespace TL60_RevisionDeTablas.Plugins.Tablas
         #endregion
 
         #region Auditoría 6: FORMATO "PARCIAL" (Corregido)
+
         private AuditItem ProcessParcialFormat(ScheduleDefinition definition)
         {
             var item = new AuditItem
@@ -600,6 +590,14 @@ namespace TL60_RevisionDeTablas.Plugins.Tablas
                 return item;
             }
 
+            // (¡CORRECCIÓN!) Usar 'RESERVED_LEGACY_COUNT_PARAM' en lugar de 'ELEM_COUNT'
+            if (parcialField.ParameterId.IntegerValue == (int)BuiltInParameter.RESERVED_LEGACY_COUNT_PARAM)
+            {
+                item.Estado = EstadoParametro.Correcto;
+                item.Mensaje = "Correcto: El campo 'Recuento' (Count) no requiere formato.";
+                return item;
+            }
+
             try
             {
                 FormatOptions options = parcialField.GetFormatOptions();
@@ -624,12 +622,14 @@ namespace TL60_RevisionDeTablas.Plugins.Tablas
             }
             catch (Exception ex)
             {
-                item.Estado = EstadoParametro.Error;
-                item.Mensaje = $"Error al leer formato de 'PARCIAL': {ex.Message}";
+                // Si da error (ej. "UseDefault is true..."), lo marcamos como Advertencia
+                item.Estado = EstadoParametro.Vacio;
+                item.Mensaje = $"Advertencia: No se pudo verificar el formato (campo no personalizable). {ex.Message}";
             }
 
             return item;
         }
+
         #endregion
 
         #region Creación de Jobs (Modificado)

@@ -1,4 +1,4 @@
-﻿// Services/DiagnosticDataBuilder.cs
+﻿// Plugins/Tablas/DiagnosticDataBuilder.cs
 using Autodesk.Revit.DB;
 using System;
 using System.Collections.Generic;
@@ -7,7 +7,8 @@ using MediaColor = System.Windows.Media.Color;
 using MediaBrush = System.Windows.Media.SolidColorBrush;
 using TL60_RevisionDeTablas.Models;
 
-namespace TL60_RevisionDeTablas.Services
+// (¡ESTA ES LA LÍNEA CORREGIDA!)
+namespace TL60_RevisionDeTablas.Plugins.Tablas
 {
     public class DiagnosticDataBuilder
     {
@@ -17,10 +18,10 @@ namespace TL60_RevisionDeTablas.Services
 
             foreach (var elementData in elementosData)
             {
-                if (elementData.Element == null) continue;
-
-                string idMostrar = elementData.ElementId?.IntegerValue.ToString() ?? "N/A";
+                // (¡AÑADIDO!) Si el ElementId es inválido (como nuestro informe de "Tablas Faltantes"), 
+                // no debe ser seleccionable.
                 bool esSeleccionable = (elementData.ElementId != null && elementData.ElementId != ElementId.InvalidElementId);
+                string idMostrar = esSeleccionable ? elementData.ElementId.IntegerValue.ToString() : "N/A";
 
                 // Procesar cada resultado de auditoría
                 foreach (var auditResult in elementData.AuditResults)
@@ -32,12 +33,12 @@ namespace TL60_RevisionDeTablas.Services
                         Grupo = elementData.Categoria,
                         CodigoIdentificacion = elementData.CodigoIdentificacion,
                         Descripcion = elementData.Nombre,
-                        NombreParametro = auditResult.AuditType, // "FILTRO", "COLUMNAS", "CONTENIDO", "CLASIFICACIÓN"
+                        NombreParametro = auditResult.AuditType,
                         ValorActual = auditResult.ValorActual,
                         ValorCorregido = auditResult.ValorCorregido,
                         Estado = auditResult.Estado,
                         Mensaje = auditResult.Mensaje,
-                        EsSeleccionable = esSeleccionable
+                        EsSeleccionable = esSeleccionable // <-- Usar la variable
                     };
 
                     rows.Add(row);

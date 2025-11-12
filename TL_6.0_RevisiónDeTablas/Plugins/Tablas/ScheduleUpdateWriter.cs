@@ -11,6 +11,9 @@ namespace TL60_RevisionDeTablas.Plugins.Tablas
     {
         private readonly Document _doc;
         private const string EMPRESA_PARAM_NAME = "EMPRESA";
+        // (¡CORREGIDO! Constante añadida)
+        private const string EMPRESA_PARAM_VALUE = "RNG";
+
 
         public ScheduleUpdateWriter(Document doc)
         {
@@ -29,7 +32,7 @@ namespace TL60_RevisionDeTablas.Plugins.Tablas
             int columnasRenombradas = 0;
             int columnasOcultadas = 0;
             int parcialCorregidos = 0;
-            int empresaCorregidos = 0; // <-- (¡NUEVO!)
+            int empresaCorregidos = 0;
 
             // (¡NUEVO!) Encontrar el Parámetro "EMPRESA" una sola vez
             ParameterElement empresaParamElem = new FilteredElementCollector(_doc)
@@ -55,7 +58,6 @@ namespace TL60_RevisionDeTablas.Plugins.Tablas
                         bool tablaModificada = false;
 
                         // --- 1. Ejecutar RENOMBRADO DE TABLA (VIEW NAME) ---
-                        // (Lógica sin cambios)
                         var viewNameAudit = elementData.AuditResults.FirstOrDefault(a => a.AuditType == "VIEW NAME" && a.IsCorrectable);
                         if (viewNameAudit != null)
                         {
@@ -72,13 +74,13 @@ namespace TL60_RevisionDeTablas.Plugins.Tablas
                             }
                         }
 
-                        // --- 2. Ejecutar RENOMBRADO DE CLASIFICACIÓN (WIP, MANUAL, SOPORTE, COPIA) ---
-                        // (¡MODIFICADO! Ahora llama a la nueva versión de RenameAndReclassify)
+                        // --- 2. Ejecutar RENOMBRADO DE CLASIFICACIÓN ---
+                        // (¡MODIFICADO!) Ahora busca más tipos de auditoría
                         var renameAudit = elementData.AuditResults.FirstOrDefault(a =>
                             (a.AuditType.StartsWith("CLASIFICACIÓN") ||
                              a.AuditType == "MANUAL" ||
                              a.AuditType == "COPIA" ||
-                             a.AuditType.StartsWith("WIP")) // <-- Añadido por si acaso
+                             a.AuditType.StartsWith("WIP")) // <-- Lógica expandida
                             && a.IsCorrectable);
 
                         if (renameAudit != null)
@@ -92,54 +94,117 @@ namespace TL60_RevisionDeTablas.Plugins.Tablas
                         }
 
                         // --- 3. Corregir FILTROS ---
-                        // (Lógica sin cambios)
                         var filterAudit = elementData.AuditResults.FirstOrDefault(a => a.AuditType == "FILTRO" && a.IsCorrectable);
-                        if (filterAudit != null) { /* ... */ }
+                        if (filterAudit != null)
+                        {
+                            var filtrosACorregir = filterAudit.Tag as List<ScheduleFilterInfo>;
+                            if (filtrosACorregir != null && WriteFilters(definition, filtrosACorregir, result.Errores, elementData.Nombre))
+                            {
+                                filtrosCorregidos++;
+                                tablaModificada = true;
+                            }
+                        }
 
                         // --- 4. Corregir CONTENIDO (Itemize) ---
-                        // (Lógica sin cambios)
                         var contentAudit = elementData.AuditResults.FirstOrDefault(a => a.AuditType == "CONTENIDO" && a.IsCorrectable);
-                        if (contentAudit != null) { /* ... */ }
+                        if (contentAudit != null)
+                        {
+                            if (!definition.IsItemized)
+                            {
+                                definition.IsItemized = true;
+                                contenidosCorregidos++;
+                                tablaModificada = true;
+                            }
+                        }
 
                         // --- 5. Corregir INCLUDE LINKS ---
-                        // (Lógica sin cambios)
                         var linksAudit = elementData.AuditResults.FirstOrDefault(a => a.AuditType == "LINKS" && a.IsCorrectable);
-                        if (linksAudit != null) { /* ... */ }
+                        if (linksAudit != null)
+                        {
+                            if (!definition.IncludeLinkedFiles)
+                            {
+                                definition.IncludeLinkedFiles = true;
+                                linksIncluidos++;
+                                tablaModificada = true;
+                            }
+                        }
 
-                        // --- 6. Corregir COLUMNAS (Renombrar u Ocultar) ---
-                        // (Lógica sin cambios)
+                        // --- 6. Corregir COLUMNAS ---
                         var columnAudit = elementData.AuditResults.FirstOrDefault(a => a.AuditType == "COLUMNAS" && a.IsCorrectable);
-                        if (columnAudit != null && columnAudit.Tag != null) { /* ... */ }
+                        if (columnAudit != null && columnAudit.Tag != null)
+                        {
+                            if (columnAudit.Tag is Dictionary<ScheduleField, string> headingsToFix)
+                            {
+                                if (WriteHeadings(headingsToFix, result.Errores, elementData.Nombre))
+                                {
+                                    columnasRenombradas += headingsToFix.Count;
+                                    tablaModificada = true;
+                                }
+                            }
+                            else if (columnAudit.Tag is List<ScheduleField> fieldsToHide)
+                            {
+                                if (HideColumns(fieldsToHide, result.Errores, elementData.Nombre))
+                                {
+                                    columnasOcultadas += fieldsToHide.Count;
+                                    tablaModificada = true;
+                                }
+                            }
+                        }
 
                         // --- 7. Corregir FORMATO PARCIAL ---
-                        // (Lógica sin cambios, ya era correcta)
                         var parcialAudit = elementData.AuditResults.FirstOrDefault(a => a.AuditType == "FORMATO PARCIAL" && a.IsCorrectable);
-                        if (parcialAudit != null && parcialAudit.Tag is ScheduleFieldId) { /* ... */ }
+                        if (parcialAudit != null && parcialAudit.Tag is ScheduleFieldId)
+                        {
+                            try
+                            {
+                                ScheduleFieldId fieldId = (ScheduleFieldId)parcialAudit.Tag;
+                                ScheduleField field = definition.GetField(fieldId);
 
+                                if (field != null && field.IsValidObject)
+                                {
+                                    FormatOptions options = field.GetFormatOptions();
+                                    options.UseDefault = false;
+                                    options.SetSymbolTypeId(new ForgeTypeId());
+                                    options.Accuracy = 0.01;
+
+                                    field.SetFormatOptions(options);
+                                    parcialCorregidos++;
+                                    tablaModificada = true;
+                                }
+                            }
+                            catch (Exception ex)
+                            {
+                                result.Errores.Add($"Error al corregir formato 'PARCIAL' en tabla '{elementData.Nombre}': {ex.Message}");
+                            }
+                        }
 
                         // ==========================================================
                         // ===== 8. (¡NUEVO!) Corregir PARÁMETRO EMPRESA
                         // ==========================================================
                         var empresaAudit = elementData.AuditResults.FirstOrDefault(a => a.AuditType == "PARÁMETRO EMPRESA" && a.IsCorrectable);
-                        if (empresaAudit != null && empresaParamElem != null)
+                        if (empresaAudit != null)
                         {
                             try
                             {
-                                // Intentar obtener el parámetro de la tabla
                                 Parameter param = view.LookupParameter(EMPRESA_PARAM_NAME);
-                                if (param == null)
+
+                                if (param == null && empresaParamElem != null)
                                 {
-                                    // Si no existe, intentamos "forzar" la vinculación (esto es complejo y puede fallar
-                                    // si el parámetro no está vinculado a OST_Schedules en el proyecto)
-                                    // La lógica de TL_1_VerificarParametroEmpresa es la ideal, pero
-                                    // por ahora, solo intentaremos establecerlo si existe.
-                                    result.Errores.Add($"Error en tabla '{elementData.Nombre}': El parámetro 'EMPRESA' existe en el proyecto pero no está vinculado a esta tabla.");
+                                    // El parámetro existe pero no está vinculado a esta tabla.
+                                    // Esto requiere una modificación de BINDING, que este add-in no debe hacer.
+                                    // El Add-in TL_1_VerificarParametroEmpresa es el encargado de eso.
+                                    result.Errores.Add($"Error en tabla '{elementData.Nombre}': El parámetro 'EMPRESA' no está vinculado. Ejecute el Add-in 'Verificar Parámetro Empresa'.");
                                 }
-                                else if (!param.IsReadOnly)
+                                else if (param != null && !param.IsReadOnly)
                                 {
-                                    param.Set(EMPRESA_PARAM_VALUE);
+                                    param.Set(EMPRESA_PARAM_VALUE); // <-- (Línea 140)
                                     empresaCorregidos++;
                                     tablaModificada = true;
+                                }
+                                else if (param == null && empresaParamElem == null)
+                                {
+                                    // El parámetro 'EMPRESA' ni siquiera existe en el proyecto.
+                                    result.Errores.Add($"Error en tabla '{elementData.Nombre}': No se encontró el Parámetro Compartido 'EMPRESA' en el proyecto.");
                                 }
                             }
                             catch (Exception ex)
@@ -162,7 +227,7 @@ namespace TL60_RevisionDeTablas.Plugins.Tablas
                                      $"Detalles:\n" +
                                      $"- Nombres de tabla corregidos: {nombresCorregidos}\n" +
                                      $"- Tablas reclasificadas: {tablasReclasificadas}\n" +
-                                     $"- Parámetros 'EMPRESA' corregidos: {empresaCorregidos}\n" + // <-- Añadido
+                                     $"- Parámetros 'EMPRESA' corregidos: {empresaCorregidos}\n" +
                                      $"- Filtros corregidos: {filtrosCorregidos}\n" +
                                      $"- Formatos 'PARCIAL' corregidos: {parcialCorregidos}\n" +
                                      $"- Contenidos (Itemize) corregidos: {contenidosCorregidos}\n" +
@@ -221,7 +286,6 @@ namespace TL60_RevisionDeTablas.Plugins.Tablas
             }
         }
 
-        // ... (WriteHeadings, HideColumns, WriteFilters, CreateScheduleFilter, FindField sin cambios) ...
         #region Métodos Helper Sin Cambios
         private bool WriteHeadings(Dictionary<ScheduleField, string> headingsToFix, List<string> errores, string nombreTabla)
         {

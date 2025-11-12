@@ -17,17 +17,11 @@ namespace TL60_RevisionDeTablas.Plugins.Tablas
         private readonly string _docTitle;
         private readonly string _spreadsheetId;
         private readonly List<string> _ejesKeywords;
-
-        // (¡NUEVO!) Almacena la especialidad para omitir la auditoría "EMPRESA"
         private readonly string _mainSpecialty;
 
         // (Campos estáticos)
         private static readonly Regex _acRegex = new Regex(@"^C\.(\d{2,3}\.)+\d{2,3}");
-        private static readonly List<string> NOMBRES_WIP = new List<string>
-        {
-            "TL", "TITO", "PDONTADENEA", "ANDREA", "EFRAIN",
-            "PROYECTOSBIM", "ASISTENTEBIM", "LUIS", "DIEGO", "JORGE", "MIGUEL"
-        };
+
         private static readonly List<string> MODELOS_ARQUITECTURA = new List<string>
         {
             "200114-CCC02-MO-AR-045500", "200114-CCC02-MO-AR-045600",
@@ -67,14 +61,14 @@ namespace TL60_RevisionDeTablas.Plugins.Tablas
         private const int _expectedHeadingCount = 9;
 
 
-        public ScheduleProcessor(Document doc, GoogleSheetsService sheetsService, UniclassDataService uniclassService, string spreadsheetId)
+        public ScheduleProcessor(Document doc, GoogleSheetsService sheetsService, UniclassDataService uniclassService, string spreadsheetId, string mainSpecialty)
         {
             _doc = doc ?? throw new ArgumentNullException(nameof(doc));
             _sheetsService = sheetsService ?? throw new ArgumentNullException(nameof(sheetsService));
             _uniclassService = uniclassService ?? throw new ArgumentNullException(nameof(uniclassService));
             _docTitle = doc.Title;
             _spreadsheetId = spreadsheetId;
-            _mainSpecialty = mainSpecialty; // <-- (¡NUEVO!)
+            _mainSpecialty = mainSpecialty;
             _ejesKeywords = new List<string>();
 
             LoadEjesKeywords();
@@ -121,7 +115,7 @@ namespace TL60_RevisionDeTablas.Plugins.Tablas
             var auditColumns = ProcessColumns(view);
             var auditContent = ProcessContent(definition);
             var auditLinks = ProcessIncludeLinks(definition);
-            var auditParcial = ProcessParcialFormat(definition); // <-- Modificado
+            var auditParcial = ProcessParcialFormat(definition);
 
             elementData.AuditResults.Add(auditViewName);
             elementData.AuditResults.Add(auditFilter);
@@ -130,21 +124,11 @@ namespace TL60_RevisionDeTablas.Plugins.Tablas
             elementData.AuditResults.Add(auditLinks);
             elementData.AuditResults.Add(auditParcial);
 
-            // ==========================================================
-            // ===== (¡NUEVO!) Auditoría de Parámetro EMPRESA
-            // ==========================================================
-            // Solo se ejecuta si la especialidad NO es "EM"
             if (!_mainSpecialty.Equals("EM", StringComparison.OrdinalIgnoreCase))
             {
                 var auditEmpresa = ProcessEmpresaParameter(view);
                 elementData.AuditResults.Add(auditEmpresa);
                 if (auditEmpresa.Estado == EstadoParametro.Corregir) auditEmpresa.Tag = auditEmpresa.Tag;
-            }
-            // ==========================================================
-
-            if (assemblyCode == "INVALID_AC")
-            {
-                // ... (Lógica sin cambios) ...
             }
 
             if (assemblyCode == "INVALID_AC")
@@ -164,7 +148,13 @@ namespace TL60_RevisionDeTablas.Plugins.Tablas
             if (auditContent.Estado == EstadoParametro.Corregir) auditContent.Tag = true;
             if (auditLinks.Estado == EstadoParametro.Corregir) auditLinks.Tag = true;
             if (auditColumns.Estado == EstadoParametro.Corregir) auditColumns.Tag = auditColumns.Tag;
+
+            // ==========================================================
+            // ===== (¡AQUÍ ESTÁ LA CORRECCIÓN!)
+            // ==========================================================
+            // (Línea 140 aprox)
             if (auditParcial.Estado == EstadoParametro.Corregir) auditParcial.Tag = auditParcial.Tag;
+            // ==========================================================
 
             elementData.DatosCompletos = elementData.AuditResults.All(r => r.Estado == EstadoParametro.Correcto);
 
@@ -453,7 +443,7 @@ namespace TL60_RevisionDeTablas.Plugins.Tablas
                 var fieldsToHideNames = new List<string>();
                 for (int i = 0; i < actualFields.Count; i++)
                 {
-                    if (!dynamicExpectedHeadings.Contains(actualHeadings[i], StringComparer.OrdinalIgnoreCase))
+                    if (!dynamicExpectedHeadings.Any(h => h.Equals(actualHeadings[i], StringComparison.OrdinalIgnoreCase)))
                     {
                         fieldsToHide.Add(actualFields[i]);
                         fieldsToHideNames.Add(actualFields[i].ColumnHeading);
@@ -577,9 +567,6 @@ namespace TL60_RevisionDeTablas.Plugins.Tablas
         }
         #endregion
 
-        // ==========================================================
-        // ===== (¡MODIFICADO!) AUDITORÍA 6: FORMATO "PARCIAL"
-        // ==========================================================
         #region Auditoría 6: FORMATO "PARCIAL" (Lógica Exhaustiva)
 
         private AuditItem ProcessParcialFormat(ScheduleDefinition definition)
@@ -614,7 +601,6 @@ namespace TL60_RevisionDeTablas.Plugins.Tablas
                 return item;
             }
 
-            // Excepción para "Count" (Recuento)
             if (parcialField.FieldType == ScheduleFieldType.Count)
             {
                 item.Estado = EstadoParametro.Correcto;
@@ -622,64 +608,72 @@ namespace TL60_RevisionDeTablas.Plugins.Tablas
                 return item;
             }
 
-            try
+            // ==========================================================
+            // ===== (¡CORREGIDO!) Lógica de 'UseDefault'
+            // ==========================================================
+
+            FormatOptions options = parcialField.GetFormatOptions();
+
+            // 1. Definir el estado "Correcto"
+            const bool correctUseDefault = false;
+            const double correctRounding = 0.01;
+            // (Para 'None', el símbolo es un ForgeTypeId nulo o vacío)
+
+            // 2. Obtener el estado "Actual"
+            bool actualUseDefault = options.UseDefault;
+            double actualRounding = 0.0; // Default
+            ForgeTypeId actualSymbolId = null;
+            string actualSymbolText = "(Project)";
+            bool isCorrect = false;
+
+            if (actualUseDefault)
             {
-                FormatOptions options = parcialField.GetFormatOptions();
-
-                // ==========================================================
-                // ===== (¡NUEVA LÓGICA EXHAUSTIVA!)
-                // ==========================================================
-
-                // 1. Definir el estado "Correcto"
-                const bool correctUseDefault = false;
-                const double correctRounding = 0.01;
-                // (Para 'None', el símbolo es un ForgeTypeId nulo o vacío)
-
-                // 2. Obtener el estado "Actual"
-                bool actualUseDefault = options.UseDefault;
-                double actualRounding = options.Accuracy;
-                ForgeTypeId actualSymbolId = null;
-                string actualSymbolText = "(Project)";
-
-                if (!actualUseDefault)
+                // Si "Use project settings" está marcado, está mal.
+                // No podemos leer 'Accuracy' o 'Symbol' (daría error).
+                isCorrect = false;
+                actualRounding = 99; // Usar un valor que fuerce el fallo
+                actualSymbolText = "(Project)";
+            }
+            else
+            {
+                // "Use project settings" está desmarcado, podemos leer de forma segura.
+                try
                 {
-                    // Solo podemos leer el símbolo si UseDefault es false
+                    actualRounding = options.Accuracy;
                     actualSymbolId = options.GetSymbolTypeId();
                     actualSymbolText = actualSymbolId?.TypeId ?? "NINGUNO";
+
+                    // Comprobar las tres condiciones
+                    bool isUseDefaultCorrect = (actualUseDefault == correctUseDefault); // (Siempre true aquí)
+                    bool isRoundingCorrect = (actualRounding == correctRounding);
+                    bool isSymbolCorrect = (actualSymbolId == null || string.IsNullOrEmpty(actualSymbolId.TypeId));
+
+                    isCorrect = isUseDefaultCorrect && isRoundingCorrect && isSymbolCorrect;
                 }
-
-                // 3. Comprobar las tres condiciones
-                bool isUseDefaultCorrect = (actualUseDefault == correctUseDefault);
-                bool isRoundingCorrect = (actualRounding == correctRounding);
-                bool isSymbolCorrect = (actualSymbolId == null || string.IsNullOrEmpty(actualSymbolId.TypeId));
-
-                // (Nota: Si actualUseDefault es true, isSymbolCorrect será true, pero isUseDefaultCorrect será false)
-                if (actualUseDefault) isSymbolCorrect = false; // Forzar fallo de símbolo si se usa Default
-
-                bool isCorrect = isUseDefaultCorrect && isRoundingCorrect && isSymbolCorrect;
-
-                // 4. Reportar
-                item.ValorActual = $"Default: {actualUseDefault}, Símbolo: {actualSymbolText}, Round: {actualRounding}";
-                item.ValorCorregido = $"Default: {correctUseDefault}, Símbolo: NINGUNO, Round: {correctRounding}";
-
-                if (isCorrect)
+                catch (Exception ex)
                 {
-                    item.Estado = EstadoParametro.Correcto;
-                    item.Mensaje = "Correcto: El formato de 'PARCIAL' es adimensional y con 2 decimales.";
-                }
-                else
-                {
-                    item.Estado = EstadoParametro.Corregir;
-                    item.Mensaje = "Corregir: El formato de 'PARCIAL' debe ser personalizado (sin símbolo y con 2 decimales).";
-                    item.IsCorrectable = true;
-                    item.Tag = parcialField.FieldId; // Marcar para corrección
+                    // Error inesperado al leer propiedades (diferente de UseDefault)
+                    item.Estado = EstadoParametro.Error;
+                    item.Mensaje = $"Error al leer formato: {ex.Message}";
+                    return item;
                 }
             }
-            catch (Exception ex)
+
+            // 4. Reportar
+            item.ValorActual = $"Default: {actualUseDefault}, Símbolo: {actualSymbolText}, Round: {actualRounding}";
+            item.ValorCorregido = $"Default: {correctUseDefault}, Símbolo: NINGUNO, Round: {correctRounding}";
+
+            if (isCorrect)
             {
-                // Este 'catch' ahora SOLO se activará para campos genuinamente no personalizables (que no sean "Count")
-                item.Estado = EstadoParametro.Vacio;
-                item.Mensaje = $"Advertencia: No se pudo verificar el formato (campo no personalizable). {ex.Message}";
+                item.Estado = EstadoParametro.Correcto;
+                item.Mensaje = "Correcto: El formato de 'PARCIAL' es adimensional y con 2 decimales.";
+            }
+            else
+            {
+                item.Estado = EstadoParametro.Corregir;
+                item.Mensaje = "Corregir: El formato de 'PARCIAL' debe ser personalizado (sin símbolo y con 2 decimales).";
+                item.IsCorrectable = true;
+                item.Tag = parcialField.FieldId; // Marcar para corrección
             }
 
             return item;
@@ -687,9 +681,6 @@ namespace TL60_RevisionDeTablas.Plugins.Tablas
 
         #endregion
 
-        // ==========================================================
-        // ===== (¡NUEVO!) AUDITORÍA 7: PARÁMETRO "EMPRESA"
-        // ==========================================================
         #region Auditoría 7: PARÁMETRO "EMPRESA"
 
         private const string EMPRESA_PARAM_NAME = "EMPRESA";
@@ -732,8 +723,5 @@ namespace TL60_RevisionDeTablas.Plugins.Tablas
         }
 
         #endregion
-
-
-
     }
 }

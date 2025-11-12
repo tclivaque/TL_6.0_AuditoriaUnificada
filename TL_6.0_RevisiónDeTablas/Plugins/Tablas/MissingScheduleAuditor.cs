@@ -5,7 +5,6 @@ using System.Linq;
 using System;
 using TL60_RevisionDeTablas.Core;
 using TL60_RevisionDeTablas.Models;
-// using System.Text; // <--- Retirado
 using System.IO;
 
 namespace TL60_RevisionDeTablas.Plugins.Tablas
@@ -15,6 +14,17 @@ namespace TL60_RevisionDeTablas.Plugins.Tablas
         private readonly Document _doc;
         private readonly UniclassDataService _uniclassService;
 
+        // ==========================================================
+        // ===== (¡NUEVO!) Lista Blanca de Equipamiento (EM)
+        // ==========================================================
+        private static readonly List<string> EM_WHITELIST = new List<string>
+        {
+            "200114-CCC02-MO-EM-000410",
+            "200114-CCC02-MO-EM-045500",
+            "200114-CCC02-MO-EM-045600"
+        };
+        // ==========================================================
+
         public MissingScheduleAuditor(Document doc, UniclassDataService uniclassService)
         {
             _doc = doc;
@@ -23,77 +33,25 @@ namespace TL60_RevisionDeTablas.Plugins.Tablas
 
         /// <summary>
         /// Busca tablas faltantes y devuelve un ElementData "dummy" con los errores.
-        /// (¡MODIFICADO! Logger 'sb' retirado de la firma)
+        /// (¡MODIFICADO!) Ahora devuelve los AC encontrados y aplica la lógica de "EM Whitelist".
         /// </summary>
         public ElementData FindMissingSchedules(
             IEnumerable<string> existingScheduleCodes,
-            List<BuiltInCategory> categoriesToAudit)
+            List<BuiltInCategory> categoriesToAudit,
+            out HashSet<string> allFoundCodes) // <-- (¡MODIFICADO!) Parámetro de salida
         {
-            // --- Debug logs retirados ---
+            var codesFoundInModel = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            var codesThatNeedSchedule = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            var existingCodesSet = new HashSet<string>(existingScheduleCodes, StringComparer.OrdinalIgnoreCase);
 
             // 1. Obtener Especialidad del Documento Principal
             string mainDocTitle = Path.GetFileNameWithoutExtension(_doc.Title);
-            string mainSpecialty = "UNKNOWN_SPECIALTY";
-            try
-            {
-                var parts = mainDocTitle.Split('-');
-                if (parts.Length > 3)
-                {
-                    mainSpecialty = parts[3];
-                }
-            }
-            catch (Exception)
-            {
-                // Ignorar error si el nombre no es estándar
-            }
+            string mainSpecialty = GetSpecialtyFromTitle(mainDocTitle);
 
             // 2. Obtener lista de TODOS los documentos a escanear (Principal + Vínculos)
-            List<Document> docsToScan = new List<Document>();
-            docsToScan.Add(_doc); // Añadir el documento principal
-
-            var linkInstances = new FilteredElementCollector(_doc)
-                .OfClass(typeof(RevitLinkInstance))
-                .Cast<RevitLinkInstance>();
-
-            foreach (var linkInstance in linkInstances)
-            {
-                Document linkDoc = linkInstance.GetLinkDocument();
-                if (linkDoc == null) continue;
-
-                RevitLinkType linkType = _doc.GetElement(linkInstance.GetTypeId()) as RevitLinkType;
-                if (linkType == null) continue;
-
-                string linkName = linkType.Name;
-                string linkSpecialty = "UNKNOWN_LINK_SPECIALTY";
-
-                try
-                {
-                    var parts = Path.GetFileNameWithoutExtension(linkName).Split('-');
-                    if (parts.Length > 3)
-                    {
-                        linkSpecialty = parts[3];
-                    }
-                }
-                catch
-                {
-                    continue; // Ignorar nombre no estándar
-                }
-
-                if (linkSpecialty.Equals(mainSpecialty, StringComparison.OrdinalIgnoreCase))
-                {
-                    if (!docsToScan.Contains(linkDoc))
-                    {
-                        docsToScan.Add(linkDoc);
-                    }
-                }
-            }
-
-            // --- Debug logs retirados ---
+            List<Document> docsToScan = GetDocumentsToScan(mainSpecialty);
 
             // 3. Escanear TODOS los documentos de la lista
-            var codesFoundInModel = new Dictionary<string, string>(System.StringComparer.OrdinalIgnoreCase);
-            var codesThatNeedSchedule = new Dictionary<string, string>(System.StringComparer.OrdinalIgnoreCase);
-            var existingCodesSet = new HashSet<string>(existingScheduleCodes, System.StringComparer.OrdinalIgnoreCase);
             var categoryFilter = new ElementMulticategoryFilter(categoriesToAudit);
 
             foreach (Document scanDoc in docsToScan)
@@ -138,7 +96,10 @@ namespace TL60_RevisionDeTablas.Plugins.Tablas
                 }
             }
 
-            // 4. Comparar y Reportar
+            // (¡MODIFICADO!) Devolver todos los códigos encontrados
+            allFoundCodes = new HashSet<string>(codesFoundInModel.Keys);
+
+            // 4. Comparar y Reportar (Lógica sin cambios)
             foreach (var kvp in codesFoundInModel) // kvp.Key = AC, kvp.Value = docName
             {
                 string code = kvp.Key;
@@ -151,7 +112,7 @@ namespace TL60_RevisionDeTablas.Plugins.Tablas
                 }
             }
 
-            // 5. Generar el reporte de auditoría
+            // 5. Generar el reporte de auditoría (Lógica sin cambios)
             if (codesThatNeedSchedule.Count > 0)
             {
                 var report = new ElementData
@@ -182,6 +143,103 @@ namespace TL60_RevisionDeTablas.Plugins.Tablas
             }
 
             return null; // No se encontraron errores
+        }
+
+        /// <summary>
+        /// (¡NUEVO!) Implementa la lógica de filtrado de documentos (Modo Normal vs Modo EM)
+        /// </summary>
+        private List<Document> GetDocumentsToScan(string mainSpecialty)
+        {
+            List<Document> docsToScan = new List<Document>();
+
+            // ==========================================================
+            // ===== CASO A: Modo Restringido EM
+            // ==========================================================
+            if (mainSpecialty.Equals("EM", StringComparison.OrdinalIgnoreCase))
+            {
+                // 1. Validar anfitrión
+                string mainDocTitle = Path.GetFileNameWithoutExtension(_doc.Title);
+                if (EM_WHITELIST.Contains(mainDocTitle))
+                {
+                    docsToScan.Add(_doc);
+                }
+
+                // 2. Validar Vínculos
+                var linkInstances = new FilteredElementCollector(_doc)
+                    .OfClass(typeof(RevitLinkInstance))
+                    .Cast<RevitLinkInstance>();
+
+                foreach (var linkInstance in linkInstances)
+                {
+                    Document linkDoc = linkInstance.GetLinkDocument();
+                    if (linkDoc == null) continue;
+
+                    RevitLinkType linkType = _doc.GetElement(linkInstance.GetTypeId()) as RevitLinkType;
+                    if (linkType == null) continue;
+
+                    string linkDocTitle = Path.GetFileNameWithoutExtension(linkType.Name);
+
+                    // Solo añadir si el nombre del vínculo está en la lista blanca
+                    if (EM_WHITELIST.Contains(linkDocTitle))
+                    {
+                        if (!docsToScan.Contains(linkDoc))
+                        {
+                            docsToScan.Add(linkDoc);
+                        }
+                    }
+                }
+            }
+            // ==========================================================
+            // ===== CASO B: Modo Normal (EE, AR, ES, etc.)
+            // ==========================================================
+            else
+            {
+                docsToScan.Add(_doc); // Añadir anfitrión
+
+                var linkInstances = new FilteredElementCollector(_doc)
+                    .OfClass(typeof(RevitLinkInstance))
+                    .Cast<RevitLinkInstance>();
+
+                foreach (var linkInstance in linkInstances)
+                {
+                    Document linkDoc = linkInstance.GetLinkDocument();
+                    if (linkDoc == null) continue;
+
+                    RevitLinkType linkType = _doc.GetElement(linkInstance.GetTypeId()) as RevitLinkType;
+                    if (linkType == null) continue;
+
+                    string linkName = linkType.Name;
+                    string linkSpecialty = GetSpecialtyFromTitle(linkName);
+
+                    // Lógica original: Añadir si la especialidad coincide
+                    if (linkSpecialty.Equals(mainSpecialty, StringComparison.OrdinalIgnoreCase))
+                    {
+                        if (!docsToScan.Contains(linkDoc))
+                        {
+                            docsToScan.Add(linkDoc);
+                        }
+                    }
+                }
+            }
+
+            return docsToScan;
+        }
+
+        /// <summary>
+        /// Helper para extraer la especialidad (ej. "EE") de un nombre de archivo.
+        /// </summary>
+        private string GetSpecialtyFromTitle(string docTitle)
+        {
+            try
+            {
+                var parts = Path.GetFileNameWithoutExtension(docTitle).Split('-');
+                if (parts.Length > 3)
+                {
+                    return parts[3]; // "ES", "EE", "AR", etc.
+                }
+            }
+            catch (Exception) { /* Ignorar */ }
+            return "UNKNOWN_SPECIALTY";
         }
 
         private IEnumerable<string> GetMaterialAssemblyCodes(Element elem, Document doc)

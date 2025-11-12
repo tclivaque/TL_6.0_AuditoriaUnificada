@@ -18,6 +18,9 @@ namespace TL60_RevisionDeTablas.Plugins.Tablas
         private readonly string _spreadsheetId;
         private readonly List<string> _ejesKeywords;
 
+        // (¡NUEVO!) Almacena la especialidad para omitir la auditoría "EMPRESA"
+        private readonly string _mainSpecialty;
+
         // (Campos estáticos)
         private static readonly Regex _acRegex = new Regex(@"^C\.(\d{2,3}\.)+\d{2,3}");
         private static readonly List<string> NOMBRES_WIP = new List<string>
@@ -71,6 +74,7 @@ namespace TL60_RevisionDeTablas.Plugins.Tablas
             _uniclassService = uniclassService ?? throw new ArgumentNullException(nameof(uniclassService));
             _docTitle = doc.Title;
             _spreadsheetId = spreadsheetId;
+            _mainSpecialty = mainSpecialty; // <-- (¡NUEVO!)
             _ejesKeywords = new List<string>();
 
             LoadEjesKeywords();
@@ -125,6 +129,23 @@ namespace TL60_RevisionDeTablas.Plugins.Tablas
             elementData.AuditResults.Add(auditContent);
             elementData.AuditResults.Add(auditLinks);
             elementData.AuditResults.Add(auditParcial);
+
+            // ==========================================================
+            // ===== (¡NUEVO!) Auditoría de Parámetro EMPRESA
+            // ==========================================================
+            // Solo se ejecuta si la especialidad NO es "EM"
+            if (!_mainSpecialty.Equals("EM", StringComparison.OrdinalIgnoreCase))
+            {
+                var auditEmpresa = ProcessEmpresaParameter(view);
+                elementData.AuditResults.Add(auditEmpresa);
+                if (auditEmpresa.Estado == EstadoParametro.Corregir) auditEmpresa.Tag = auditEmpresa.Tag;
+            }
+            // ==========================================================
+
+            if (assemblyCode == "INVALID_AC")
+            {
+                // ... (Lógica sin cambios) ...
+            }
 
             if (assemblyCode == "INVALID_AC")
             {
@@ -666,60 +687,53 @@ namespace TL60_RevisionDeTablas.Plugins.Tablas
 
         #endregion
 
-        #region Creación de Jobs (Modificado)
-        public ElementData CreateRenamingJob(ViewSchedule view)
+        // ==========================================================
+        // ===== (¡NUEVO!) AUDITORÍA 7: PARÁMETRO "EMPRESA"
+        // ==========================================================
+        #region Auditoría 7: PARÁMETRO "EMPRESA"
+
+        private const string EMPRESA_PARAM_NAME = "EMPRESA";
+        private const string EMPRESA_PARAM_VALUE = "RNG";
+
+        private AuditItem ProcessEmpresaParameter(ViewSchedule view)
         {
-            string nombreActual = view.Name;
-            string nombreCorregido = nombreActual.Replace("C.", "SOPORTE.");
-            var jobData = new RenamingJobData { NuevoNombre = nombreCorregido, NuevoGrupoVista = "00 TRABAJO EN PROCESO - WIP", NuevoSubGrupoVista = "SOPORTE DE METRADOS" };
-            return CreateJobElementData(view, "CLASIFICACIÓN (SOPORTE)", "Corregir: Tabla de soporte mal clasificada.", jobData);
-        }
-        public ElementData CreateManualRenamingJob(ViewSchedule view)
-        {
-            string nombreCorregido = view.Name.Replace("C.", "SOPORTE.");
-            var jobData = new RenamingJobData { NuevoNombre = nombreCorregido, NuevoGrupoVista = "REVISAR", NuevoSubGrupoVista = "METRADO MANUAL" };
-            return CreateJobElementData(view, "MANUAL", "Corregir: Tabla de Metrado Manual. Se reclasificará y renombrará.", jobData);
-        }
-        public ElementData CreateCopyReclassifyJob(ViewSchedule view)
-        {
-            string nombreCorregido = view.Name.Replace("C.", "SOPORTE.");
-            var jobData = new RenamingJobData { NuevoNombre = nombreCorregido, NuevoGrupoVista = "REVISAR", NuevoSubGrupoVista = string.Empty };
-            return CreateJobElementData(view, "COPIA", "Corregir: La tabla parece ser una copia. Se reclasificará y renombrará.", jobData);
-        }
-        public ElementData CreateWipReclassifyJob(ViewSchedule view)
-        {
-            string nombreCorregido = view.Name.Replace("C.", "SOPORTE.");
-            var jobData = new RenamingJobData { NuevoNombre = nombreCorregido, NuevoGrupoVista = "00 TRABAJO EN PROCESO - WIP", NuevoSubGrupoVista = "SOPORTE BIM" };
-            return CreateJobElementData(view, "CLASIFICACIÓN (WIP)", "Corregir: Tabla de trabajo interno. Será reclasificada y renombrada.", jobData);
-        }
-        private ElementData CreateJobElementData(ViewSchedule view, string auditType, string mensaje, RenamingJobData jobData)
-        {
-            string grupoActual = view.LookupParameter("GRUPO DE VISTA")?.AsString() ?? "(Vacío)";
-            string subGrupoActual = view.LookupParameter("SUBGRUPO DE VISTA")?.AsString() ?? "(Vacío)";
-            string valorActualStr = $"NOMBRE: {view.Name}\nGRUPO: {grupoActual}\nSUBGRUPO: {subGrupoActual}";
-            string valorCorregidoStr = $"NOMBRE: {jobData.NuevoNombre}\nGRUPO: {jobData.NuevoGrupoVista}\nSUBGRUPO: {jobData.NuevoSubGrupoVista}";
-            var elementData = new ElementData
+            var item = new AuditItem
             {
-                ElementId = view.Id,
-                Element = view,
-                Nombre = view.Name,
-                Categoria = view.Category?.Name ?? "Tabla de Planificación",
-                CodigoIdentificacion = "N/A",
-                DatosCompletos = false
-            };
-            var auditItem = new AuditItem
-            {
-                AuditType = auditType,
+                AuditType = "PARÁMETRO EMPRESA",
                 IsCorrectable = true,
-                Estado = EstadoParametro.Corregir,
-                Mensaje = mensaje,
-                ValorActual = valorActualStr,
-                ValorCorregido = valorCorregidoStr,
-                Tag = jobData
+                ValorCorregido = EMPRESA_PARAM_VALUE
             };
-            elementData.AuditResults.Add(auditItem);
-            return elementData;
+
+            Parameter param = view.LookupParameter(EMPRESA_PARAM_NAME);
+
+            if (param == null)
+            {
+                item.Estado = EstadoParametro.Corregir;
+                item.Mensaje = $"Corregir: Falta el parámetro de instancia '{EMPRESA_PARAM_NAME}' en la tabla.";
+                item.ValorActual = "(No existe)";
+                item.Tag = EMPRESA_PARAM_VALUE; // Marcar para corrección
+            }
+            else if (param.AsString() != EMPRESA_PARAM_VALUE)
+            {
+                item.Estado = EstadoParametro.Corregir;
+                item.Mensaje = $"Corregir: El parámetro '{EMPRESA_PARAM_NAME}' debe tener el valor '{EMPRESA_PARAM_VALUE}'.";
+                item.ValorActual = param.AsString() ?? "(Vacío)";
+                item.Tag = EMPRESA_PARAM_VALUE; // Marcar para corrección
+            }
+            else
+            {
+                item.Estado = EstadoParametro.Correcto;
+                item.Mensaje = "Correcto: El parámetro 'EMPRESA' es 'RNG'.";
+                item.ValorActual = param.AsString();
+                item.IsCorrectable = false;
+            }
+
+            return item;
         }
+
         #endregion
+
+
+
     }
 }

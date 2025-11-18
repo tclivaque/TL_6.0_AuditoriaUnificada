@@ -23,8 +23,8 @@
         </Style>
 
         <Style x:Key="ShowButtonStyle" TargetType="Button">
-            <Setter Property="Background" Value="#E0E0E0"/>
-            <Setter Property="Foreground" Value="Black"/>
+            <Setter Property="Background" Value="#F0F0F0"/>
+            <Setter Property="Foreground" Value="#666666"/>
             <Setter Property="BorderThickness" Value="0"/>
             <Setter Property="Padding" Value="8,4"/>
             <Setter Property="Cursor" Value="Hand"/>
@@ -40,11 +40,11 @@
             </Setter>
             <Style.Triggers>
                 <Trigger Property="IsMouseOver" Value="True">
-                    <Setter Property="Background" Value="#CCCCCC"/>
+                    <Setter Property="Background" Value="#D0D0D0"/>
                 </Trigger>
                 <Trigger Property="IsEnabled" Value="False">
-                    <Setter Property="Background" Value="#F5F5F5"/>
-                    <Setter Property="Foreground" Value="#999999"/>
+                    <Setter Property="Background" Value="#F8F8F8"/>
+                    <Setter Property="Foreground" Value="#CCCCCC"/>
                     <Setter Property="Cursor" Value="No"/>
                 </Trigger>
             </Style.Triggers>
@@ -87,7 +87,7 @@
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
-        <TextBlock Grid.Row="0" Text="Diagnóstico de Parámetros COBie" FontSize="24" FontWeight="Bold" Foreground="#2C3E50" HorizontalAlignment="Center" Margin="0,0,0,15"/>
+        <TextBlock Grid.Row="0" Text="Auditoría de Parámetros COBie" FontSize="24" FontWeight="Bold" Foreground="#2C3E50" HorizontalAlignment="Center" Margin="0,0,0,15"/>
 
         <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,0,0,10">
             <Button Style="{StaticResource LegendButtonStyle}" Background="#EAECEE" BorderBrush="#BDC3C7" Click="FilterButton_Click" Tag="Total">

@@ -23,10 +23,5 @@ namespace TL60_RevisionDeTablas.UI
             // Seleccionar por defecto la pestaña de COBie (primera pestaña)
             PluginsTabControl.SelectedIndex = 0;
         }
-
-        private void CerrarButton_Click(object sender, RoutedEventArgs e)
-        {
-            this.Close();
-        }
     }
 }

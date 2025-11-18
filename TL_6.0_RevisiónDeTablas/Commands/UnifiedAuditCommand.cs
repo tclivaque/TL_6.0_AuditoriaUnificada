@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text.RegularExpressions;
 using Autodesk.Revit.Attributes;
 using Autodesk.Revit.DB;
 using Autodesk.Revit.UI;
@@ -12,6 +13,7 @@ using TL60_RevisionDeTablas.Models;
 using TL60_RevisionDeTablas.Core;
 using TL60_RevisionDeTablas.Plugins.COBie.Services;
 using TL60_RevisionDeTablas.Plugins.COBie.Models;
+using TL60_RevisionDeTablas.Plugins.Tablas;
 
 namespace TL60_RevisionDeTablas.Commands
 {
@@ -20,6 +22,24 @@ namespace TL60_RevisionDeTablas.Commands
     public class UnifiedAuditCommand : IExternalCommand
     {
         private const string COBIE_SPREADSHEET_ID = "14bYBONt68lfM-sx6iIJxkYExXS0u7sdgijEScL3Ed3Y";
+        private const string TABLAS_SPREADSHEET_ID = "14bYBONt68lfM-sx6iIJxkYExXS0u7sdgijEScL3Ed3Y";
+
+        private static readonly Regex _acRegex = new Regex(@"^C\.(\d{2,3}\.)+\d{2,3}");
+
+        private static readonly List<BuiltInCategory> _categoriesToAudit = new List<BuiltInCategory>
+        {
+            BuiltInCategory.OST_StructuralColumns, BuiltInCategory.OST_StructuralFraming, BuiltInCategory.OST_Floors,
+            BuiltInCategory.OST_Roofs, BuiltInCategory.OST_Walls, BuiltInCategory.OST_GenericModel,
+            BuiltInCategory.OST_Ceilings, BuiltInCategory.OST_Stairs, BuiltInCategory.OST_StairsRailing,
+            BuiltInCategory.OST_Doors, BuiltInCategory.OST_Windows, BuiltInCategory.OST_EdgeSlab,
+            BuiltInCategory.OST_PlumbingFixtures, BuiltInCategory.OST_PipeFitting, BuiltInCategory.OST_PipeCurves,
+            BuiltInCategory.OST_PipeAccessory, BuiltInCategory.OST_ConduitFitting, BuiltInCategory.OST_Conduit,
+            BuiltInCategory.OST_ElectricalEquipment, BuiltInCategory.OST_ElectricalFixtures, BuiltInCategory.OST_FlexPipeCurves,
+            BuiltInCategory.OST_FlexDuctCurves, BuiltInCategory.OST_DataDevices, BuiltInCategory.OST_SecurityDevices,
+            BuiltInCategory.OST_FireAlarmDevices, BuiltInCategory.OST_CommunicationDevices, BuiltInCategory.OST_NurseCallDevices,
+            BuiltInCategory.OST_LightingFixtures, BuiltInCategory.OST_Furniture, BuiltInCategory.OST_FurnitureSystems,
+            BuiltInCategory.OST_SpecialityEquipment
+        };
 
         public Result Execute(ExternalCommandData commandData, ref string message, ElementSet elements)
         {
@@ -43,11 +63,17 @@ namespace TL60_RevisionDeTablas.Commands
                 }
 
                 // ====================================
-                // PARTE 2: PLUGIN TABLAS (Por implementar)
+                // PARTE 2: PROCESAR PLUGIN TABLAS
                 // ====================================
-                // TODO: Implementar ProcessTablasPlugin cuando se complete la integración
-                // El plugin Tablas requiere más parámetros y lógica que se integrará después
                 TablasPluginControl tablasControl = null;
+                try
+                {
+                    tablasControl = ProcessTablasPlugin(doc);
+                }
+                catch (Exception ex)
+                {
+                    TaskDialog.Show("Error en Tablas", $"Error al procesar plugin Tablas:\n{ex.Message}");
+                }
 
                 // ====================================
                 // PARTE 3: MOSTRAR VENTANA UNIFICADA
@@ -149,5 +175,125 @@ namespace TL60_RevisionDeTablas.Commands
 
             return cobieControl;
         }
+
+        private TablasPluginControl ProcessTablasPlugin(Document doc)
+        {
+            // Servicios
+            var sheetsService = new GoogleSheetsService();
+            string docTitle = Path.GetFileNameWithoutExtension(doc.Title);
+
+            // Cargar Uniclass data
+            var uniclassService = new UniclassDataService(sheetsService, docTitle);
+            uniclassService.LoadClassificationData(TABLAS_SPREADSHEET_ID);
+
+            // Crear procesador de tablas
+            string mainSpecialty = GetSpecialtyFromTitle(docTitle);
+            var processor = new ScheduleProcessor(doc, sheetsService, uniclassService, TABLAS_SPREADSHEET_ID, mainSpecialty);
+
+            // Auditar Unidades Globales
+            List<ElementData> unidadesGlobales = processor.AuditProjectUnits();
+
+            // Procesar todas las tablas de planificación (lógica simplificada del MainCommand)
+            var elementosData = new List<ElementData>();
+
+            var allSchedules = new FilteredElementCollector(doc)
+                .OfCategory(BuiltInCategory.OST_Schedules)
+                .WhereElementIsNotElementType()
+                .Cast<ViewSchedule>()
+                .Where(v => v.IsTemplate == false);
+
+            var existingMetradoCodes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            // Procesar cada tabla
+            foreach (ViewSchedule view in allSchedules)
+            {
+                if (view == null || view.Definition == null) continue;
+
+                string viewName = view.Name;
+                if (viewName.ToUpper().StartsWith("SOPORTE.")) continue;
+
+                // Si empieza con "C." y grupo de vista empieza con "C."
+                if (viewName.StartsWith("C.") && GetParamValue(view, "GRUPO DE VISTA").StartsWith("C."))
+                {
+                    Match acMatch = _acRegex.Match(viewName);
+                    string assemblyCode = acMatch.Success ? acMatch.Value : "INVALID_AC";
+
+                    if (assemblyCode != "INVALID_AC")
+                    {
+                        existingMetradoCodes.Add(assemblyCode);
+                    }
+
+                    elementosData.Add(processor.ProcessSingleElement(view, assemblyCode));
+                }
+            }
+
+            // Auditoría de elementos (tablas faltantes)
+            var elementAuditor = new MissingScheduleAuditor(doc, uniclassService);
+            HashSet<string> codigosEncontradosEnModelos;
+
+            ElementData missingSchedulesReport = elementAuditor.FindMissingSchedules(
+                existingMetradoCodes,
+                _categoriesToAudit,
+                new HashSet<string> { docTitle },
+                out codigosEncontradosEnModelos);
+
+            if (missingSchedulesReport != null)
+            {
+                elementosData.Add(missingSchedulesReport);
+            }
+
+            // Construir datos de diagnóstico
+            var diagnosticBuilder = new TL60_RevisionDeTablas.Plugins.Tablas.DiagnosticDataBuilder();
+
+            var todosElementos = new List<ElementData>();
+            todosElementos.AddRange(unidadesGlobales);
+            todosElementos.AddRange(elementosData);
+
+            var diagnosticRows = diagnosticBuilder.BuildDiagnosticRows(todosElementos);
+
+            // Preparar writers asíncronos
+            var writerAsync = new ScheduleUpdateAsync();
+            var viewActivator = new ViewActivatorAsync();
+
+            // Crear y retornar UserControl
+            var tablasControl = new TablasPluginControl(
+                diagnosticRows,
+                todosElementos,
+                doc,
+                writerAsync,
+                viewActivator
+            );
+
+            return tablasControl;
+        }
+
+        #region Helpers
+
+        private string GetParamValue(Element elemento, string nombre_param)
+        {
+            if (elemento == null) return string.Empty;
+            Parameter param = elemento.LookupParameter(nombre_param);
+            if (param != null && param.HasValue)
+            {
+                return param.AsString() ?? string.Empty;
+            }
+            return string.Empty;
+        }
+
+        private string GetSpecialtyFromTitle(string docTitle)
+        {
+            try
+            {
+                var parts = Path.GetFileNameWithoutExtension(docTitle).Split('-');
+                if (parts.Length > 3)
+                {
+                    return parts[3];
+                }
+            }
+            catch (Exception) { }
+            return "UNKNOWN_SPECIALTY";
+        }
+
+        #endregion
     }
 }

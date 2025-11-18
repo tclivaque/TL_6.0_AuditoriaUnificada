@@ -67,27 +67,55 @@ namespace TL60_RevisionDeTablas.Core
             {
                 try
                 {
-                    // Leer rango D:L (Col D=AC, Col L=Tipo)
-                    var data = _sheetsService.ReadData(spreadsheetId, $"'{sheetName}'!D:L");
+                    // Leer todo el rango para hacerlo dinámico
+                    var data = _sheetsService.ReadData(spreadsheetId, $"'{sheetName}'!A:Z");
                     if (data == null || data.Count <= 1)
                     {
                         System.Diagnostics.Debug.WriteLine($"WARN: No se encontraron datos en {sheetName}");
                         continue;
                     }
 
+                    // Leer encabezados (primera fila)
+                    var headerRow = data[0];
+
+                    // Buscar columnas por nombre (eliminando espacios)
+                    int assemblyCodeIndex = FindColumnIndex(headerRow, "Assembly Code");
+                    int metradoTypeIndex = FindColumnIndex(headerRow, "ORIGEN DE METRADO");
+
+                    if (assemblyCodeIndex == -1)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"ERROR: No se encontró la columna 'Assembly Code' en {sheetName}");
+                        continue;
+                    }
+
+                    if (metradoTypeIndex == -1)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"WARN: No se encontró la columna 'ORIGEN DE METRADO' en {sheetName}, se usará 'REVIT' por defecto");
+                    }
+
+                    // Procesar filas de datos (saltar encabezados)
                     foreach (var row in data.Skip(1))
                     {
-                        if (row.Count < 9) continue; // Asegurar que la fila llega hasta la Col L (índice 8)
+                        if (row.Count <= assemblyCodeIndex) continue;
 
-                        string assemblyCode = GoogleSheetsService.GetCellValue(row, 0); // Col D (Índice 0 en rango D:L)
-                        string metradoType = GoogleSheetsService.GetCellValue(row, 8); // Col L (Índice 8 en rango D:L)
+                        string assemblyCode = GoogleSheetsService.GetCellValue(row, assemblyCodeIndex);
 
                         if (string.IsNullOrWhiteSpace(assemblyCode))
                             continue;
 
-                        // Almacenar el tipo. Si está vacío, se asume "REVIT".
-                        // Si ya existe (de ACTIVO), será sobrescrito (por SITIO)
-                        _classificationCache[assemblyCode.Trim()] = string.IsNullOrWhiteSpace(metradoType) ? "REVIT" : metradoType.Trim();
+                        // Leer tipo de metrado (si la columna existe y tiene datos)
+                        string metradoType = "REVIT"; // Valor por defecto
+                        if (metradoTypeIndex != -1 && row.Count > metradoTypeIndex)
+                        {
+                            string valorLeido = GoogleSheetsService.GetCellValue(row, metradoTypeIndex);
+                            if (!string.IsNullOrWhiteSpace(valorLeido))
+                            {
+                                metradoType = valorLeido.Trim();
+                            }
+                        }
+
+                        // Almacenar en caché (si ya existe será sobrescrito)
+                        _classificationCache[assemblyCode.Trim()] = metradoType;
                     }
                 }
                 catch (Exception ex)
@@ -95,6 +123,40 @@ namespace TL60_RevisionDeTablas.Core
                     System.Diagnostics.Debug.WriteLine($"Error al leer {sheetName}: {ex.Message}");
                 }
             }
+        }
+
+        /// <summary>
+        /// Busca el índice de una columna por su nombre de encabezado.
+        /// Elimina espacios para hacer matching robusto.
+        /// </summary>
+        /// <param name="headerRow">Fila de encabezados</param>
+        /// <param name="columnName">Nombre de la columna a buscar</param>
+        /// <returns>Índice de la columna, o -1 si no se encuentra</returns>
+        private int FindColumnIndex(IList<object> headerRow, string columnName)
+        {
+            if (headerRow == null || string.IsNullOrWhiteSpace(columnName))
+                return -1;
+
+            // Normalizar el nombre buscado (eliminar espacios y convertir a mayúsculas)
+            string normalizedSearchName = columnName.Replace(" ", "").ToUpperInvariant();
+
+            for (int i = 0; i < headerRow.Count; i++)
+            {
+                string headerValue = GoogleSheetsService.GetCellValue(headerRow, i);
+
+                if (string.IsNullOrWhiteSpace(headerValue))
+                    continue;
+
+                // Normalizar el encabezado de la hoja (eliminar espacios y convertir a mayúsculas)
+                string normalizedHeaderValue = headerValue.Replace(" ", "").ToUpperInvariant();
+
+                if (normalizedHeaderValue == normalizedSearchName)
+                {
+                    return i;
+                }
+            }
+
+            return -1; // No encontrado
         }
 
         /// <summary>

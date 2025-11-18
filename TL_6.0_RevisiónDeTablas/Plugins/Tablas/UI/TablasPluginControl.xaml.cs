@@ -8,6 +8,7 @@ using System.Windows;
 using System.Windows.Controls;
 using TL60_RevisionDeTablas.Models;
 using TL60_RevisionDeTablas.Plugins.Tablas;
+using TL60_RevisionDeTablas.Services;
 
 namespace TL60_RevisionDeTablas.Plugins.Tablas.UI
 {

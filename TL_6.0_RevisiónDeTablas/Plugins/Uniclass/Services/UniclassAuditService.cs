@@ -70,10 +70,56 @@ namespace TL60_RevisionDeTablas.Plugins.Uniclass.Services
                 .WhereElementIsNotElementType()
                 .ToElements();
 
+            // Buscar si existe el elemento con ID específico (puede ser instancia o tipo)
+            Element debugElement = null;
+            try
+            {
+                debugElement = _doc.GetElement(new ElementId(DEBUG_ELEMENT_ID));
+                if (debugElement != null)
+                {
+                    _debugLog.AppendLine($"Elemento encontrado con ID {DEBUG_ELEMENT_ID}:");
+                    _debugLog.AppendLine($"  - Nombre: {debugElement.Name}");
+                    _debugLog.AppendLine($"  - Categoría: {debugElement.Category?.Name ?? "N/A"}");
+                    _debugLog.AppendLine($"  - Es ElementType: {debugElement is ElementType}");
+
+                    if (debugElement is ElementType)
+                    {
+                        _debugLog.AppendLine($"  - Es un TIPO de elemento");
+                    }
+                    else
+                    {
+                        ElementId typeId = debugElement.GetTypeId();
+                        _debugLog.AppendLine($"  - Es una INSTANCIA, su tipo tiene ID: {typeId?.IntegerValue ?? -1}");
+                        if (typeId != null && typeId != ElementId.InvalidElementId)
+                        {
+                            ElementType debugTipo = _doc.GetElement(typeId) as ElementType;
+                            if (debugTipo != null)
+                            {
+                                _debugLog.AppendLine($"  - Nombre del tipo: {debugTipo.Name}");
+                            }
+                        }
+                    }
+                    _debugLog.AppendLine();
+                }
+                else
+                {
+                    _debugLog.AppendLine($"❌ NO se encontró ningún elemento con ID {DEBUG_ELEMENT_ID} en el proyecto");
+                    _debugLog.AppendLine();
+                }
+            }
+            catch (Exception ex)
+            {
+                _debugLog.AppendLine($"Error al buscar elemento {DEBUG_ELEMENT_ID}: {ex.Message}");
+                _debugLog.AppendLine();
+            }
+
             // Agrupar elementos por tipo para procesar por tipo
             var elementosPorTipo = elementos
                 .Where(e => e.GetTypeId() != null && e.GetTypeId() != ElementId.InvalidElementId)
                 .GroupBy(e => e.GetTypeId());
+
+            _debugLog.AppendLine($"Total de tipos a procesar: {elementosPorTipo.Count()}");
+            _debugLog.AppendLine();
 
             foreach (var grupoTipo in elementosPorTipo)
             {
@@ -330,16 +376,27 @@ namespace TL60_RevisionDeTablas.Plugins.Uniclass.Services
             try
             {
                 string desktopPath = Environment.GetFolderPath(Environment.SpecialFolder.Desktop);
-                string fileName = $"UnicLass_Debug_{DateTime.Now:yyyyMMdd_HHmmss}.txt";
+                string fileName = $"Uniclass_Debug_{DateTime.Now:yyyyMMdd_HHmmss}.txt";
                 string filePath = Path.Combine(desktopPath, fileName);
+
+                _debugLog.AppendLine();
+                _debugLog.AppendLine("=".PadRight(80, '='));
+                _debugLog.AppendLine($"Archivo guardado en: {filePath}");
+                _debugLog.AppendLine("=".PadRight(80, '='));
 
                 File.WriteAllText(filePath, _debugLog.ToString());
 
-                System.Diagnostics.Debug.WriteLine($"DEBUG LOG guardado en: {filePath}");
+                System.Diagnostics.Debug.WriteLine($"✓ DEBUG LOG guardado en: {filePath}");
+
+                // Mostrar mensaje al usuario
+                Autodesk.Revit.UI.TaskDialog.Show("Debug Uniclass",
+                    $"Archivo de debug creado:\n\n{filePath}\n\nBúscalo en tu escritorio.");
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"Error al guardar debug log: {ex.Message}");
+                System.Diagnostics.Debug.WriteLine($"❌ Error al guardar debug log: {ex.Message}");
+                Autodesk.Revit.UI.TaskDialog.Show("Error Debug",
+                    $"No se pudo crear el archivo de debug:\n\n{ex.Message}");
             }
         }
     }

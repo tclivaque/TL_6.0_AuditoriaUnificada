@@ -84,8 +84,8 @@ namespace TL60_RevisionDeTablas.Core
             {
                 try
                 {
-                    // Leer todo el rango para hacerlo dinámico
-                    var data = _sheetsService.ReadData(spreadsheetId, $"'{sheetName}'!A:Z");
+                    // Leer todo el rango hasta la columna AZ (52 columnas) para incluir todos los parámetros Uniclass
+                    var data = _sheetsService.ReadData(spreadsheetId, $"'{sheetName}'!A:AZ");
                     if (data == null || data.Count <= 1)
                     {
                         System.Diagnostics.Debug.WriteLine($"WARN: No se encontraron datos en {sheetName}");

@@ -47,14 +47,29 @@
         <TabControl x:Name="PluginsTabControl"
                     BorderThickness="0" Background="White">
 
-            <!-- Pestaña 1: Parámetros COBie -->
+            <!-- Pestaña 1: Auditoría de Parámetros de Metrados -->
+            <TabItem Header="Parámetros de Metrados" Style="{StaticResource TabStyle}">
+                <ContentControl x:Name="MetradosPluginContainer"/>
+            </TabItem>
+
+            <!-- Pestaña 2: Auditoría de Parámetros COBie -->
             <TabItem Header="Parámetros COBie" Style="{StaticResource TabStyle}">
                 <ContentControl x:Name="CobiePluginContainer"/>
             </TabItem>
 
-            <!-- Pestaña 2: Tablas de Planificación -->
+            <!-- Pestaña 3: Auditoría de Parámetros Uniclass -->
+            <TabItem Header="Parámetros Uniclass" Style="{StaticResource TabStyle}">
+                <ContentControl x:Name="UniclassPluginContainer"/>
+            </TabItem>
+
+            <!-- Pestaña 4: Auditoría de Tablas de Planificación -->
             <TabItem Header="Tablas de Planificación" Style="{StaticResource TabStyle}">
                 <ContentControl x:Name="TablasPluginContainer"/>
+            </TabItem>
+
+            <!-- Pestaña 5: Auditoría de Project Browser -->
+            <TabItem Header="Project Browser" Style="{StaticResource TabStyle}">
+                <ContentControl x:Name="ProjectBrowserPluginContainer"/>
             </TabItem>
         </TabControl>
     </Grid>

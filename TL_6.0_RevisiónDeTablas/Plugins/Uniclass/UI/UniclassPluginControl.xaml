@@ -1,0 +1,174 @@
+<!-- Plugins/Uniclass/UI/UniclassPluginControl.xaml -->
+<UserControl x:Class="TL60_RevisionDeTablas.Plugins.Uniclass.UI.UniclassPluginControl"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             Background="#F5F5F5">
+
+    <UserControl.Resources>
+        <Style x:Key="DiagnosticRowStyle" TargetType="DataGridRow">
+            <Setter Property="Background" Value="{Binding BackgroundColor}"/>
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding Estado}" Value="Error">
+                    <Setter Property="Foreground" Value="#721C24"/>
+                </DataTrigger>
+                <DataTrigger Binding="{Binding Estado}" Value="Corregir">
+                    <Setter Property="Foreground" Value="#0C5460"/>
+                </DataTrigger>
+                <DataTrigger Binding="{Binding Estado}" Value="Vacio">
+                    <Setter Property="Foreground" Value="#856404"/>
+                </DataTrigger>
+                <DataTrigger Binding="{Binding Estado}" Value="Correcto">
+                    <Setter Property="Foreground" Value="#155724"/>
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+
+        <Style x:Key="ShowButtonStyle" TargetType="Button">
+            <Setter Property="Background" Value="#F0F0F0"/>
+            <Setter Property="Foreground" Value="#666666"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="8,4"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="FontSize" Value="16"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}" CornerRadius="3" Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="#D0D0D0"/>
+                </Trigger>
+                <Trigger Property="IsEnabled" Value="False">
+                    <Setter Property="Background" Value="#F8F8F8"/>
+                    <Setter Property="Foreground" Value="#CCCCCC"/>
+                    <Setter Property="Cursor" Value="No"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <Style x:Key="LegendButtonStyle" TargetType="Button">
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="15,8"/>
+            <Setter Property="Margin" Value="5,0"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}"
+                                 BorderBrush="{TemplateBinding BorderBrush}"
+                                 BorderThickness="{TemplateBinding BorderThickness}"
+                                 CornerRadius="4"
+                                 Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Opacity" Value="0.8"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+    </UserControl.Resources>
+
+    <Grid Margin="20">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <TextBlock Grid.Row="0" Text="Auditoría de Parámetros Uniclass" FontSize="24" FontWeight="Bold" Foreground="#2C3E50" HorizontalAlignment="Center" Margin="0,0,0,20"/>
+
+        <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,0,0,10">
+            <Button Style="{StaticResource LegendButtonStyle}" Background="#EAECEE" BorderBrush="#BDC3C7" Click="FilterButton_Click" Tag="Total">
+                <TextBlock x:Name="TotalTextBlock" Text="Total: 0" Foreground="#34495E"/>
+            </Button>
+            <Button Style="{StaticResource LegendButtonStyle}" Background="#D1ECF1" BorderBrush="#BEE5EB" Click="FilterButton_Click" Tag="Corregir">
+                <TextBlock x:Name="CorregirTextBlock" Text="🔧 A Corregir: 0" Foreground="#0C5460"/>
+            </Button>
+            <Button Style="{StaticResource LegendButtonStyle}" Background="#FFF3CD" BorderBrush="#FFEEBA" Click="FilterButton_Click" Tag="Vacio">
+                <TextBlock x:Name="VacioTextBlock" Text="⚠ Advertencias: 0" Foreground="#856404"/>
+            </Button>
+            <Button Style="{StaticResource LegendButtonStyle}" Background="#F8D7DA" BorderBrush="#F5C6CB" Click="FilterButton_Click" Tag="Error">
+                <TextBlock x:Name="ErrorTextBlock" Text="❌ Errores: 0" Foreground="#721C24"/>
+            </Button>
+            <Button Style="{StaticResource LegendButtonStyle}" Background="#D4EDDA" BorderBrush="#C3E6CB" Click="FilterButton_Click" Tag="Correcto">
+                <TextBlock x:Name="CorrectoTextBlock" Text="✓ Correctos: 0" Foreground="#155724"/>
+            </Button>
+        </StackPanel>
+
+        <Border Grid.Row="2" Background="White" BorderBrush="#BDC3C7" BorderThickness="1" CornerRadius="5">
+            <DataGrid x:Name="DiagnosticDataGrid" AutoGenerateColumns="False" CanUserAddRows="False" CanUserDeleteRows="False"
+                      IsReadOnly="True" SelectionMode="Single" SelectionUnit="FullRow" GridLinesVisibility="Horizontal" HeadersVisibility="Column"
+                      RowStyle="{StaticResource DiagnosticRowStyle}" RowHeight="35" FontSize="12"
+                      ScrollViewer.HorizontalScrollBarVisibility="Auto" ScrollViewer.VerticalScrollBarVisibility="Auto">
+                <DataGrid.Columns>
+                    <DataGridTemplateColumn Header="ABRIR" Width="50">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate>
+                                <Button Content="👁️" Style="{StaticResource ShowButtonStyle}" IsEnabled="{Binding EsSeleccionable}" Click="MostrarButton_Click" Tag="{Binding}"/>
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
+                    <DataGridTextColumn Header="#" Binding="{Binding NumeroFila}" Width="50" IsReadOnly="True">
+                        <DataGridTextColumn.ElementStyle>
+                            <Style TargetType="TextBlock">
+                                <Setter Property="HorizontalAlignment" Value="Center"/>
+                                <Setter Property="FontWeight" Value="SemiBold"/>
+                            </Style>
+                        </DataGridTextColumn.ElementStyle>
+                    </DataGridTextColumn>
+                    <DataGridTextColumn Header="ID" Binding="{Binding IdMostrar}" Width="80"/>
+                    <DataGridTextColumn Header="GRUPO" Binding="{Binding GrupoCOBie}" Width="100"/>
+                    <DataGridTextColumn Header="ASSEMBLY CODE" Binding="{Binding AssemblyCode}" Width="120"/>
+                    <DataGridTextColumn Header="DESCRIPCIÓN" Binding="{Binding Descripcion}" Width="200"/>
+                    <DataGridTextColumn Header="PARÁMETRO" Binding="{Binding NombreParametro}" Width="350"/>
+                    <DataGridTextColumn Header="VALOR ACTUAL" Binding="{Binding ValorActual}" Width="250"/>
+                    <DataGridTextColumn Header="VALOR CORRECTO" Binding="{Binding ValorCorregido}" Width="250"/>
+                    <DataGridTextColumn Header="MENSAJE" Binding="{Binding Mensaje}" Width="*"/>
+                </DataGrid.Columns>
+            </DataGrid>
+        </Border>
+
+        <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,15,0,0">
+            <Button x:Name="CorregirButton" Content="Corregir" Width="120" Height="40" Margin="10,0" FontSize="14" FontWeight="SemiBold"
+                    Background="#28A745" Foreground="White" BorderThickness="0" Cursor="Hand" Click="CorregirButton_Click">
+                <Button.Style>
+                    <Style TargetType="Button">
+                        <Setter Property="Template">
+                            <Setter.Value>
+                                <ControlTemplate TargetType="Button">
+                                    <Border Background="{TemplateBinding Background}" CornerRadius="5" Padding="10">
+                                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                    </Border>
+                                </ControlTemplate>
+                            </Setter.Value>
+                        </Setter>
+                        <Style.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter Property="Background" Value="#218838"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Background" Value="#BDC3C7"/>
+                                <Setter Property="Opacity" Value="0.7"/>
+                                <Setter Property="Cursor" Value="No"/>
+                            </Trigger>
+                        </Style.Triggers>
+                    </Style>
+                </Button.Style>
+            </Button>
+        </StackPanel>
+    </Grid>
+</UserControl>

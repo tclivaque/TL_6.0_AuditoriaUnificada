@@ -14,6 +14,8 @@ using TL60_RevisionDeTablas.Core;
 using TL60_RevisionDeTablas.Plugins.COBie.Services;
 using TL60_RevisionDeTablas.Plugins.COBie.Models;
 using TL60_RevisionDeTablas.Plugins.Tablas;
+using TL60_RevisionDeTablas.Plugins.Uniclass.Services;
+using TL60_RevisionDeTablas.Plugins.Uniclass.UI;
 
 namespace TL60_RevisionDeTablas.Commands
 {
@@ -63,7 +65,20 @@ namespace TL60_RevisionDeTablas.Commands
                 }
 
                 // ====================================
-                // PARTE 2: PROCESAR PLUGIN TABLAS
+                // PARTE 2: PROCESAR PLUGIN UNICLASS
+                // ====================================
+                UniclassPluginControl uniclassControl = null;
+                try
+                {
+                    uniclassControl = ProcessUniclassPlugin(uidoc);
+                }
+                catch (Exception ex)
+                {
+                    TaskDialog.Show("Error en Uniclass", $"Error al procesar plugin Uniclass:\n{ex.Message}\n\nStack Trace:\n{ex.StackTrace}");
+                }
+
+                // ====================================
+                // PARTE 3: PROCESAR PLUGIN TABLAS
                 // ====================================
                 TablasPluginControl tablasControl = null;
                 try
@@ -76,11 +91,17 @@ namespace TL60_RevisionDeTablas.Commands
                 }
 
                 // ====================================
-                // PARTE 3: MOSTRAR VENTANA UNIFICADA
+                // PARTE 4: MOSTRAR VENTANA UNIFICADA
                 // ====================================
                 if (cobieControl != null)
                 {
-                    var unifiedWindow = new UnifiedWindow(cobieControl, tablasControl);
+                    var unifiedWindow = new UnifiedWindow(
+                        metradosPlugin: null,          // Placeholder - no implementado aún
+                        cobiePlugin: cobieControl,
+                        uniclassPlugin: uniclassControl,
+                        tablasPlugin: tablasControl,
+                        projectBrowserPlugin: null     // Placeholder - no implementado aún
+                    );
                     unifiedWindow.Show();
                     return Result.Succeeded;
                 }
@@ -267,6 +288,45 @@ namespace TL60_RevisionDeTablas.Commands
             return tablasControl;
         }
 
+        private UniclassPluginControl ProcessUniclassPlugin(UIDocument uidoc)
+        {
+            Document doc = uidoc.Document;
+
+            // Inicializar servicios
+            var sheetsService = new GoogleSheetsService();
+            sheetsService.Initialize();
+
+            // Inicializar Uniclass data service
+            string docTitleWithoutExt = Path.GetFileNameWithoutExtension(doc.Title);
+            var uniclassService = new UniclassDataService(sheetsService, docTitleWithoutExt);
+            uniclassService.LoadClassificationData(TABLAS_SPREADSHEET_ID);
+
+            // Leer categorías a auditar desde Google Sheets
+            List<BuiltInCategory> categoriasAuditar = ReadCategoriasFromSheet(sheetsService, TABLAS_SPREADSHEET_ID);
+
+            if (categoriasAuditar.Count == 0)
+            {
+                // Si no se encuentran categorías, retornar null (no mostrar pestaña)
+                System.Diagnostics.Debug.WriteLine("WARN: No se encontraron categorías para Uniclass");
+                return null;
+            }
+
+            // Procesar elementos
+            var auditService = new UniclassAuditService(doc, uniclassService, categoriasAuditar);
+            var elementosData = auditService.ProcessElements();
+
+            if (elementosData.Count == 0)
+            {
+                System.Diagnostics.Debug.WriteLine("INFO: No se encontraron elementos para auditar en Uniclass");
+                return null;
+            }
+
+            // Crear UserControl
+            var uniclassControl = new UniclassPluginControl(uidoc, elementosData);
+
+            return uniclassControl;
+        }
+
         #region Helpers
 
         private string GetParamValue(Element elemento, string nombre_param)
@@ -292,6 +352,85 @@ namespace TL60_RevisionDeTablas.Commands
             }
             catch (Exception) { }
             return "UNKNOWN_SPECIALTY";
+        }
+
+        /// <summary>
+        /// Lee las categorías a auditar desde Google Sheets
+        /// Hoja: "ENTRADAS_SCRIPT_2.0 COBIE"
+        /// Busca la fila que contenga "CATEGORIAS" en columna A
+        /// Lee las categorías de columna B (saltos de línea separan categorías)
+        /// </summary>
+        private List<BuiltInCategory> ReadCategoriasFromSheet(GoogleSheetsService sheetsService, string spreadsheetId)
+        {
+            var categorias = new List<BuiltInCategory>();
+
+            try
+            {
+                string sheetName = "ENTRADAS_SCRIPT_2.0 COBIE";
+                var data = sheetsService.ReadData(spreadsheetId, $"'{sheetName}'!A:B");
+
+                if (data == null || data.Count == 0)
+                {
+                    System.Diagnostics.Debug.WriteLine($"WARN: No se encontraron datos en {sheetName}");
+                    return categorias;
+                }
+
+                // Buscar la fila que contenga "CATEGORIAS" en columna A
+                int categoriaRowIndex = -1;
+                for (int i = 0; i < data.Count; i++)
+                {
+                    if (data[i].Count > 0)
+                    {
+                        string cellValue = GoogleSheetsService.GetCellValue(data[i], 0);
+                        if (cellValue != null && cellValue.Trim().Equals("CATEGORIAS", StringComparison.OrdinalIgnoreCase))
+                        {
+                            categoriaRowIndex = i;
+                            break;
+                        }
+                    }
+                }
+
+                if (categoriaRowIndex == -1)
+                {
+                    System.Diagnostics.Debug.WriteLine("WARN: No se encontró la fila 'CATEGORIAS' en columna A");
+                    return categorias;
+                }
+
+                // Leer el valor de la celda B en esa fila
+                if (data[categoriaRowIndex].Count > 1)
+                {
+                    string categoriasText = GoogleSheetsService.GetCellValue(data[categoriaRowIndex], 1);
+
+                    if (!string.IsNullOrWhiteSpace(categoriasText))
+                    {
+                        // Separar por saltos de línea
+                        var categoriasArray = categoriasText.Split(new[] { '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries);
+
+                        foreach (var catStr in categoriasArray)
+                        {
+                            string trimmedCat = catStr.Trim();
+                            if (string.IsNullOrWhiteSpace(trimmedCat))
+                                continue;
+
+                            // Intentar parsear como BuiltInCategory
+                            if (Enum.TryParse(trimmedCat, out BuiltInCategory bic))
+                            {
+                                categorias.Add(bic);
+                            }
+                            else
+                            {
+                                System.Diagnostics.Debug.WriteLine($"WARN: No se pudo parsear la categoría '{trimmedCat}'");
+                            }
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error al leer categorías desde Google Sheets: {ex.Message}");
+            }
+
+            return categorias;
         }
 
         #endregion

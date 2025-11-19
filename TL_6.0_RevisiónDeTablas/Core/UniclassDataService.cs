@@ -9,11 +9,27 @@ namespace TL60_RevisionDeTablas.Core
     /// Servicio compartido para leer la "Matriz UniClass" desde Google Sheets.
     /// Centraliza la lógica de qué Assembly Code es "REVIT" o "MANUAL".
     /// </summary>
+    /// <summary>
+    /// Datos de parámetros Uniclass para un Assembly Code
+    /// </summary>
+    public class UniclassParameterData
+    {
+        public string AssemblyCode { get; set; }
+        public bool ShouldAudit { get; set; } // true si columna UNICLAS = "✓"
+        public string EF_Number { get; set; }
+        public string EF_Description { get; set; }
+        public string Pr_Number { get; set; }
+        public string Pr_Description { get; set; }
+        public string Ss_Number { get; set; }
+        public string Ss_Description { get; set; }
+    }
+
     public class UniclassDataService
     {
         private readonly GoogleSheetsService _sheetsService;
         private readonly string _docTitle;
         private readonly Dictionary<string, string> _classificationCache;
+        private readonly Dictionary<string, UniclassParameterData> _uniclassParametersCache;
 
         private const string SHEET_ACTIVO = "Matriz UniClass - ACTIVO";
         private const string SHEET_SITIO = "Matriz UniClass - SITIO";
@@ -32,6 +48,7 @@ namespace TL60_RevisionDeTablas.Core
             _sheetsService = sheetsService ?? throw new ArgumentNullException(nameof(sheetsService));
             _docTitle = docTitle ?? string.Empty;
             _classificationCache = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            _uniclassParametersCache = new Dictionary<string, UniclassParameterData>(StringComparer.OrdinalIgnoreCase);
         }
 
         /// <summary>
@@ -82,6 +99,15 @@ namespace TL60_RevisionDeTablas.Core
                     int assemblyCodeIndex = FindColumnIndex(headerRow, "Assembly Code");
                     int metradoTypeIndex = FindColumnIndex(headerRow, "ORIGEN DE METRADO");
 
+                    // Buscar columnas de parámetros Uniclass
+                    int uniclasIndex = FindColumnIndex(headerRow, "UNICLAS");
+                    int efNumberIndex = FindColumnIndex(headerRow, "Classification.Uniclass.EF.Number");
+                    int efDescIndex = FindColumnIndex(headerRow, "Classification.Uniclass.EF.Description");
+                    int prNumberIndex = FindColumnIndex(headerRow, "Classification.Uniclass.Pr.Number");
+                    int prDescIndex = FindColumnIndex(headerRow, "Classification.Uniclass.Pr.Description");
+                    int ssNumberIndex = FindColumnIndex(headerRow, "Classification.Uniclass.Ss.Number");
+                    int ssDescIndex = FindColumnIndex(headerRow, "Classification.Uniclass.Ss.Description");
+
                     if (assemblyCodeIndex == -1)
                     {
                         System.Diagnostics.Debug.WriteLine($"ERROR: No se encontró la columna 'Assembly Code' en {sheetName}");
@@ -103,6 +129,8 @@ namespace TL60_RevisionDeTablas.Core
                         if (string.IsNullOrWhiteSpace(assemblyCode))
                             continue;
 
+                        string trimmedAssemblyCode = assemblyCode.Trim();
+
                         // Leer tipo de metrado (si la columna existe y tiene datos)
                         string metradoType = "REVIT"; // Valor por defecto
                         if (metradoTypeIndex != -1 && row.Count > metradoTypeIndex)
@@ -114,8 +142,50 @@ namespace TL60_RevisionDeTablas.Core
                             }
                         }
 
-                        // Almacenar en caché (si ya existe será sobrescrito)
-                        _classificationCache[assemblyCode.Trim()] = metradoType;
+                        // Almacenar en caché de clasificación
+                        _classificationCache[trimmedAssemblyCode] = metradoType;
+
+                        // Leer y almacenar datos de parámetros Uniclass
+                        var uniclassData = new UniclassParameterData
+                        {
+                            AssemblyCode = trimmedAssemblyCode,
+                            ShouldAudit = false,
+                            EF_Number = string.Empty,
+                            EF_Description = string.Empty,
+                            Pr_Number = string.Empty,
+                            Pr_Description = string.Empty,
+                            Ss_Number = string.Empty,
+                            Ss_Description = string.Empty
+                        };
+
+                        // Verificar si debe auditarse (columna UNICLAS)
+                        if (uniclasIndex != -1 && row.Count > uniclasIndex)
+                        {
+                            string uniclasValue = GoogleSheetsService.GetCellValue(row, uniclasIndex);
+                            uniclassData.ShouldAudit = uniclasValue?.Trim() == "✓";
+                        }
+
+                        // Leer parámetros Uniclass si las columnas existen
+                        if (efNumberIndex != -1 && row.Count > efNumberIndex)
+                            uniclassData.EF_Number = GoogleSheetsService.GetCellValue(row, efNumberIndex) ?? string.Empty;
+
+                        if (efDescIndex != -1 && row.Count > efDescIndex)
+                            uniclassData.EF_Description = GoogleSheetsService.GetCellValue(row, efDescIndex) ?? string.Empty;
+
+                        if (prNumberIndex != -1 && row.Count > prNumberIndex)
+                            uniclassData.Pr_Number = GoogleSheetsService.GetCellValue(row, prNumberIndex) ?? string.Empty;
+
+                        if (prDescIndex != -1 && row.Count > prDescIndex)
+                            uniclassData.Pr_Description = GoogleSheetsService.GetCellValue(row, prDescIndex) ?? string.Empty;
+
+                        if (ssNumberIndex != -1 && row.Count > ssNumberIndex)
+                            uniclassData.Ss_Number = GoogleSheetsService.GetCellValue(row, ssNumberIndex) ?? string.Empty;
+
+                        if (ssDescIndex != -1 && row.Count > ssDescIndex)
+                            uniclassData.Ss_Description = GoogleSheetsService.GetCellValue(row, ssDescIndex) ?? string.Empty;
+
+                        // Almacenar en caché de parámetros Uniclass (si ya existe será sobrescrito)
+                        _uniclassParametersCache[trimmedAssemblyCode] = uniclassData;
                     }
                 }
                 catch (Exception ex)
@@ -177,6 +247,31 @@ namespace TL60_RevisionDeTablas.Core
             }
 
             return "DESCONOCIDO";
+        }
+
+        /// <summary>
+        /// Obtiene los datos de parámetros Uniclass para un Assembly Code.
+        /// </summary>
+        /// <returns>UniclassParameterData o null si no se encuentra</returns>
+        public UniclassParameterData GetUniclassParameters(string assemblyCode)
+        {
+            if (string.IsNullOrWhiteSpace(assemblyCode))
+                return null;
+
+            if (_uniclassParametersCache.TryGetValue(assemblyCode.Trim(), out UniclassParameterData data))
+            {
+                return data;
+            }
+
+            return null;
+        }
+
+        /// <summary>
+        /// Verifica si un Assembly Code tiene parámetros Uniclass definidos.
+        /// </summary>
+        public bool HasUniclassData(string assemblyCode)
+        {
+            return GetUniclassParameters(assemblyCode) != null;
         }
     }
 }

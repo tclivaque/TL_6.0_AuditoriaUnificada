@@ -6,10 +6,10 @@ using System.Windows;
 using System.Windows.Controls;
 using Autodesk.Revit.DB;
 using Autodesk.Revit.UI;
-using TL60_RevisionDeTablas.Models;
-using TL60_RevisionDeTablas.Plugins.COBie.Services;
+using TL60_AuditoriaUnificada.Models;
+using TL60_AuditoriaUnificada.Plugins.COBie.Services;
 
-namespace TL60_RevisionDeTablas.Plugins.COBie.UI
+namespace TL60_AuditoriaUnificada.Plugins.COBie.UI
 {
     public partial class CobiePluginControl : UserControl
     {

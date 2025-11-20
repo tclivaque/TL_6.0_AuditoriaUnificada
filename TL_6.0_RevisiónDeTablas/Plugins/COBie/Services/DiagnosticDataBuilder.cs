@@ -1,12 +1,12 @@
 ﻿using Autodesk.Revit.DB;
-using TL60_RevisionDeTablas.Plugins.COBie.Models;
-using TL60_RevisionDeTablas.Models;
+using TL60_AuditoriaUnificada.Plugins.COBie.Models;
+using TL60_AuditoriaUnificada.Models;
 using System;
 using System.Collections.Generic;
 using System.Globalization; // Necesario para CultureInfo
 using System.Linq;
 
-namespace TL60_RevisionDeTablas.Plugins.COBie.Services
+namespace TL60_AuditoriaUnificada.Plugins.COBie.Services
 {
     public class DiagnosticDataBuilder
     {

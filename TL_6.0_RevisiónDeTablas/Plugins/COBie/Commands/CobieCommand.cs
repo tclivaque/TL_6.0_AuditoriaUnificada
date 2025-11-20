@@ -1,5 +1,5 @@
 ﻿using System;
-using TL60_RevisionDeTablas.Core;
+using TL60_AuditoriaUnificada.Core;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -10,14 +10,14 @@ using Autodesk.Revit.DB.Mechanical; // Necesario para MEPCurve
 using Autodesk.Revit.DB.Plumbing; // Necesario para Pipe
 using Autodesk.Revit.DB.Electrical; // Necesario para Conduit
 using Autodesk.Revit.UI;
-using TL60_RevisionDeTablas.Plugins.COBie.Models;
-using TL60_RevisionDeTablas.Models;
-using TL60_RevisionDeTablas.Plugins.COBie.Services;
-using TL60_RevisionDeTablas.Plugins.COBie.UI;
+using TL60_AuditoriaUnificada.Plugins.COBie.Models;
+using TL60_AuditoriaUnificada.Models;
+using TL60_AuditoriaUnificada.Plugins.COBie.Services;
+using TL60_AuditoriaUnificada.Plugins.COBie.UI;
 using System.Globalization;
 
 
-namespace TL60_RevisionDeTablas.Plugins.COBie.Commands
+namespace TL60_AuditoriaUnificada.Plugins.COBie.Commands
 {
     [Transaction(TransactionMode.Manual)]
     [Regeneration(RegenerationOption.Manual)]

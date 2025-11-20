@@ -6,10 +6,10 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
-using TL60_RevisionDeTablas.Models;
-using TL60_RevisionDeTablas.Plugins.Uniclass.Services;
+using TL60_AuditoriaUnificada.Models;
+using TL60_AuditoriaUnificada.Plugins.Uniclass.Services;
 
-namespace TL60_RevisionDeTablas.Plugins.Uniclass.UI
+namespace TL60_AuditoriaUnificada.Plugins.Uniclass.UI
 {
     public partial class UniclassPluginControl : UserControl
     {

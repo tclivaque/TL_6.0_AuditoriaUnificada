@@ -1,6 +1,6 @@
 ﻿using Autodesk.Revit.DB;
 
-namespace TL60_RevisionDeTablas.Models
+namespace TL60_AuditoriaUnificada.Models
 {
     /// <summary>
     /// Almacena la definición de un filtro correcto

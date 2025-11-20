@@ -2,10 +2,10 @@
 using System.Collections.Generic;
 using System.Linq;
 using Autodesk.Revit.DB;
-using TL60_RevisionDeTablas.Plugins.COBie.Models;
-using TL60_RevisionDeTablas.Models;
+using TL60_AuditoriaUnificada.Plugins.COBie.Models;
+using TL60_AuditoriaUnificada.Models;
 
-namespace TL60_RevisionDeTablas.Plugins.COBie.Services
+namespace TL60_AuditoriaUnificada.Plugins.COBie.Services
 {
     /// <summary>
     /// Administrador de gráficos de vista (pintar y aislar elementos)

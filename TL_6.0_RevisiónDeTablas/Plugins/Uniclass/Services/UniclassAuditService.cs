@@ -5,10 +5,10 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
-using TL60_RevisionDeTablas.Core;
-using TL60_RevisionDeTablas.Models;
+using TL60_AuditoriaUnificada.Core;
+using TL60_AuditoriaUnificada.Models;
 
-namespace TL60_RevisionDeTablas.Plugins.Uniclass.Services
+namespace TL60_AuditoriaUnificada.Plugins.Uniclass.Services
 {
     /// <summary>
     /// Servicio de auditoría de parámetros Uniclass

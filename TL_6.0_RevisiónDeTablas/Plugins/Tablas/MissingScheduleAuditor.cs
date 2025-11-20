@@ -3,11 +3,11 @@ using Autodesk.Revit.DB;
 using System.Collections.Generic;
 using System.Linq;
 using System;
-using TL60_RevisionDeTablas.Core;
-using TL60_RevisionDeTablas.Models;
+using TL60_AuditoriaUnificada.Core;
+using TL60_AuditoriaUnificada.Models;
 using System.IO;
 
-namespace TL60_RevisionDeTablas.Plugins.Tablas
+namespace TL60_AuditoriaUnificada.Plugins.Tablas
 {
     public class MissingScheduleAuditor
     {

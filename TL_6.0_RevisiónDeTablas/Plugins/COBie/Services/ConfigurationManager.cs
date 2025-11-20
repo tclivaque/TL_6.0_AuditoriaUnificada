@@ -1,11 +1,11 @@
 ﻿using System;
-using TL60_RevisionDeTablas.Core;
+using TL60_AuditoriaUnificada.Core;
 using System.Collections.Generic;
 using System.Linq;
-using TL60_RevisionDeTablas.Plugins.COBie.Models;
-using TL60_RevisionDeTablas.Models;
+using TL60_AuditoriaUnificada.Plugins.COBie.Models;
+using TL60_AuditoriaUnificada.Models;
 
-namespace TL60_RevisionDeTablas.Plugins.COBie.Services
+namespace TL60_AuditoriaUnificada.Plugins.COBie.Services
 {
     /// <summary>
     /// Administrador de configuración desde Google Sheets "ENTRADAS_SCRIPT_2.0 COBIE"

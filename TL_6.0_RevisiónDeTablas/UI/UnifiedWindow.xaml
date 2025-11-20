@@ -1,4 +1,4 @@
-﻿<Window x:Class="TL60_RevisionDeTablas.UI.UnifiedWindow"
+﻿<Window x:Class="TL60_AuditoriaUnificada.UI.UnifiedWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="TL 6.0 - Auditoría Unificada"

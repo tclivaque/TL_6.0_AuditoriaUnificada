@@ -7,13 +7,13 @@ using System.Linq;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
-using TL60_RevisionDeTablas.Models;
-using TL60_RevisionDeTablas.Plugins.Tablas;
-using TL60_RevisionDeTablas.Services;
+using TL60_AuditoriaUnificada.Models;
+using TL60_AuditoriaUnificada.Plugins.Tablas;
+using TL60_AuditoriaUnificada.Services;
 
 // (No se necesitan usings de agrupación)
 
-namespace TL60_RevisionDeTablas.UI
+namespace TL60_AuditoriaUnificada.UI
 {
     public partial class MainWindow : Window
     {

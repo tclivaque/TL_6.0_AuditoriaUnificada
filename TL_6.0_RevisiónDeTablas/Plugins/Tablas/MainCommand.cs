@@ -7,12 +7,12 @@ using System.Collections.Generic;
 using System.Linq;
 using System.IO;
 using System.Text.RegularExpressions;
-using TL60_RevisionDeTablas.Models;
-using TL60_RevisionDeTablas.Core;
-using TL60_RevisionDeTablas.Plugins.Tablas;
-using TL60_RevisionDeTablas.UI;
+using TL60_AuditoriaUnificada.Models;
+using TL60_AuditoriaUnificada.Core;
+using TL60_AuditoriaUnificada.Plugins.Tablas;
+using TL60_AuditoriaUnificada.UI;
 
-namespace TL60_RevisionDeTablas.Plugins.Tablas
+namespace TL60_AuditoriaUnificada.Plugins.Tablas
 {
     [Transaction(TransactionMode.Manual)]
     [Regeneration(RegenerationOption.Manual)]

@@ -6,18 +6,18 @@ using System.Text.RegularExpressions;
 using Autodesk.Revit.Attributes;
 using Autodesk.Revit.DB;
 using Autodesk.Revit.UI;
-using TL60_RevisionDeTablas.UI;
-using TL60_RevisionDeTablas.Plugins.COBie.UI;
-using TL60_RevisionDeTablas.Plugins.Tablas.UI;
-using TL60_RevisionDeTablas.Models;
-using TL60_RevisionDeTablas.Core;
-using TL60_RevisionDeTablas.Plugins.COBie.Services;
-using TL60_RevisionDeTablas.Plugins.COBie.Models;
-using TL60_RevisionDeTablas.Plugins.Tablas;
-using TL60_RevisionDeTablas.Plugins.Uniclass.Services;
-using TL60_RevisionDeTablas.Plugins.Uniclass.UI;
+using TL60_AuditoriaUnificada.UI;
+using TL60_AuditoriaUnificada.Plugins.COBie.UI;
+using TL60_AuditoriaUnificada.Plugins.Tablas.UI;
+using TL60_AuditoriaUnificada.Models;
+using TL60_AuditoriaUnificada.Core;
+using TL60_AuditoriaUnificada.Plugins.COBie.Services;
+using TL60_AuditoriaUnificada.Plugins.COBie.Models;
+using TL60_AuditoriaUnificada.Plugins.Tablas;
+using TL60_AuditoriaUnificada.Plugins.Uniclass.Services;
+using TL60_AuditoriaUnificada.Plugins.Uniclass.UI;
 
-namespace TL60_RevisionDeTablas.Commands
+namespace TL60_AuditoriaUnificada.Commands
 {
     [Transaction(TransactionMode.Manual)]
     [Regeneration(RegenerationOption.Manual)]
@@ -186,7 +186,7 @@ namespace TL60_RevisionDeTablas.Commands
             }
 
             // Construir datos de diagnóstico (usar fully qualified name para evitar ambigüedad)
-            var diagnosticBuilder = new TL60_RevisionDeTablas.Plugins.COBie.Services.DiagnosticDataBuilder();
+            var diagnosticBuilder = new TL60_AuditoriaUnificada.Plugins.COBie.Services.DiagnosticDataBuilder();
             var diagnosticRows = diagnosticBuilder.BuildDiagnosticRows(elementosData);
 
             // Crear UserControl
@@ -264,7 +264,7 @@ namespace TL60_RevisionDeTablas.Commands
             }
 
             // Construir datos de diagnóstico
-            var diagnosticBuilder = new TL60_RevisionDeTablas.Plugins.Tablas.DiagnosticDataBuilder();
+            var diagnosticBuilder = new TL60_AuditoriaUnificada.Plugins.Tablas.DiagnosticDataBuilder();
 
             var todosElementos = new List<ElementData>();
             todosElementos.AddRange(unidadesGlobales);

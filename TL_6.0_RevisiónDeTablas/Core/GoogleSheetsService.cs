@@ -9,7 +9,7 @@ using Google.Apis.Sheets.v4.Data;
 using Google.Apis.Services;
 
 // (ASEGURAR QUE EL NAMESPACE ES .Core)
-namespace TL60_RevisionDeTablas.Core
+namespace TL60_AuditoriaUnificada.Core
 {
     public class GoogleSheetsService
     {

@@ -6,10 +6,10 @@ using Autodesk.Revit.DB.Architecture;
 using Autodesk.Revit.DB.Mechanical;
 using Autodesk.Revit.DB.Plumbing;
 using Autodesk.Revit.DB.Electrical;
-using TL60_RevisionDeTablas.Plugins.COBie.Models;
-using TL60_RevisionDeTablas.Models;
+using TL60_AuditoriaUnificada.Plugins.COBie.Models;
+using TL60_AuditoriaUnificada.Models;
 
-namespace TL60_RevisionDeTablas.Plugins.COBie.Services
+namespace TL60_AuditoriaUnificada.Plugins.COBie.Services
 {
     /// <summary>
     /// Escribe parámetros en elementos de Revit

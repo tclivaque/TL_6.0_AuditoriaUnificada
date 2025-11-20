@@ -1,7 +1,7 @@
 using System.Windows;
 using System.Windows.Controls;
 
-namespace TL60_RevisionDeTablas.UI
+namespace TL60_AuditoriaUnificada.UI
 {
     public partial class UnifiedWindow : Window
     {

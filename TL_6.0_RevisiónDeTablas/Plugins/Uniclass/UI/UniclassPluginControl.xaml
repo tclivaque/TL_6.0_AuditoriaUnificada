@@ -1,5 +1,5 @@
 <!-- Plugins/Uniclass/UI/UniclassPluginControl.xaml -->
-<UserControl x:Class="TL60_RevisionDeTablas.Plugins.Uniclass.UI.UniclassPluginControl"
+<UserControl x:Class="TL60_AuditoriaUnificada.Plugins.Uniclass.UI.UniclassPluginControl"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              Background="#F5F5F5">

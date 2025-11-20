@@ -5,9 +5,9 @@ using System.Collections.Generic;
 using System.Linq;
 using MediaColor = System.Windows.Media.Color;
 using MediaBrush = System.Windows.Media.SolidColorBrush;
-using TL60_RevisionDeTablas.Models;
+using TL60_AuditoriaUnificada.Models;
 
-namespace TL60_RevisionDeTablas.Plugins.Tablas
+namespace TL60_AuditoriaUnificada.Plugins.Tablas
 {
     public class DiagnosticDataBuilder
     {

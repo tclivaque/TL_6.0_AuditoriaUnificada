@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 
-namespace TL60_RevisionDeTablas.Plugins.COBie.Models
+namespace TL60_AuditoriaUnificada.Plugins.COBie.Models
 {
     /// <summary>
     /// Modelo de configuración leída desde Google Sheets "ENTRADAS_SCRIPT_2.0 COBIE"

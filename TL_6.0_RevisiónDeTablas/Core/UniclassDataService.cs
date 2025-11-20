@@ -3,7 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace TL60_RevisionDeTablas.Core
+namespace TL60_AuditoriaUnificada.Core
 {
     /// <summary>
     /// Servicio compartido para leer la "Matriz UniClass" desde Google Sheets.

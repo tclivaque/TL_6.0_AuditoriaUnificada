@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using Autodesk.Revit.DB;
 
-namespace TL60_RevisionDeTablas.Models
+namespace TL60_AuditoriaUnificada.Models
 {
     /// <summary>
     /// Contiene los datos de un elemento procesado y todos sus resultados de auditoría.

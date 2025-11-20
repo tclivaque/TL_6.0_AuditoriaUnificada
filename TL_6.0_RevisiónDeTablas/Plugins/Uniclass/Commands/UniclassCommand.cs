@@ -6,12 +6,12 @@ using System.Linq;
 using Autodesk.Revit.Attributes;
 using Autodesk.Revit.DB;
 using Autodesk.Revit.UI;
-using TL60_RevisionDeTablas.Core;
-using TL60_RevisionDeTablas.Models;
-using TL60_RevisionDeTablas.Plugins.Uniclass.Services;
-using TL60_RevisionDeTablas.Plugins.Uniclass.UI;
+using TL60_AuditoriaUnificada.Core;
+using TL60_AuditoriaUnificada.Models;
+using TL60_AuditoriaUnificada.Plugins.Uniclass.Services;
+using TL60_AuditoriaUnificada.Plugins.Uniclass.UI;
 
-namespace TL60_RevisionDeTablas.Plugins.Uniclass.Commands
+namespace TL60_AuditoriaUnificada.Plugins.Uniclass.Commands
 {
     [Transaction(TransactionMode.Manual)]
     [Regeneration(RegenerationOption.Manual)]

@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 
-namespace TL60_RevisionDeTablas.Models
+namespace TL60_AuditoriaUnificada.Models
 {
     public class ProcessingResult
     {

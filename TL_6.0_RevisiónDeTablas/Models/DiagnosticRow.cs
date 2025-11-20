@@ -2,7 +2,7 @@
 using System.Windows.Media;
 using Autodesk.Revit.DB;
 
-namespace TL60_RevisionDeTablas.Models
+namespace TL60_AuditoriaUnificada.Models
 {
     /// <summary>
     /// Modelo para una fila del diagnóstico (tabla de la ventana).

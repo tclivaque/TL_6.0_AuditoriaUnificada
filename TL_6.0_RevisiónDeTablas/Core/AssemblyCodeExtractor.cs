@@ -4,7 +4,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace TL60_RevisionDeTablas.Core
+namespace TL60_AuditoriaUnificada.Core
 {
     /// <summary>
     /// Clase compartida para extraer Assembly Code de elementos.

@@ -2,9 +2,9 @@
 using OfficeOpenXml;
 using System.Collections.Generic;
 using System.IO;
-using TL60_RevisionDeTablas.Models;
+using TL60_AuditoriaUnificada.Models;
 
-namespace TL60_RevisionDeTablas.Services
+namespace TL60_AuditoriaUnificada.Services
 {
     public class ExcelExportService
     {

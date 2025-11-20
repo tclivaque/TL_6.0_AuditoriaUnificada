@@ -5,7 +5,7 @@ using System;
 using System.Threading;
 
 // (¡ESTA ES LA LÍNEA CORREGIDA!)
-namespace TL60_RevisionDeTablas.Plugins.Tablas
+namespace TL60_AuditoriaUnificada.Plugins.Tablas
 {
     /// <summary>
     /// Maneja la activación de una vista (abrir tabla) usando ExternalEvent

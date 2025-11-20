@@ -1,6 +1,6 @@
 ﻿using System;
 
-namespace TL60_RevisionDeTablas.Plugins.COBie.Models
+namespace TL60_AuditoriaUnificada.Plugins.COBie.Models
 {
     /// <summary>
     /// Representa una definición de parámetro COBie desde Google Sheets "PARÁMETROS COBIE"

@@ -3,9 +3,9 @@ using Autodesk.Revit.DB;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using TL60_RevisionDeTablas.Models;
+using TL60_AuditoriaUnificada.Models;
 
-namespace TL60_RevisionDeTablas.Plugins.Uniclass.Services
+namespace TL60_AuditoriaUnificada.Plugins.Uniclass.Services
 {
     /// <summary>
     /// Constructor de filas de diagnóstico para Uniclass

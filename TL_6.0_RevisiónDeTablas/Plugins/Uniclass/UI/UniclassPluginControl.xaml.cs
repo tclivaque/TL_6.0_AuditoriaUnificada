@@ -4,6 +4,7 @@ using Autodesk.Revit.UI;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using TL60_AuditoriaUnificada.Models;
@@ -132,7 +133,7 @@ namespace TL60_AuditoriaUnificada.Plugins.Uniclass.UI
             }
         }
 
-        private void CorregirButton_Click(object sender, RoutedEventArgs e)
+        private async void CorregirButton_Click(object sender, RoutedEventArgs e)
         {
             try
             {
@@ -156,8 +157,12 @@ namespace TL60_AuditoriaUnificada.Plugins.Uniclass.UI
                 if (result != MessageBoxResult.Yes)
                     return;
 
-                // Ejecutar corrección usando ExternalEvent (evita error de transacción desde UI)
-                var processingResult = _parameterWriterAsync.UpdateParametersAsync(_doc, _elementosData);
+                // Deshabilitar botón durante la corrección
+                CorregirButton.IsEnabled = false;
+
+                // Ejecutar corrección en thread secundario (evita congelar UI)
+                var processingResult = await Task.Run(() =>
+                    _parameterWriterAsync.UpdateParametersAsync(_doc, _elementosData));
 
                 // Mostrar resultado
                 if (processingResult.Exitoso)
@@ -182,6 +187,11 @@ namespace TL60_AuditoriaUnificada.Plugins.Uniclass.UI
             {
                 MessageBox.Show($"Error al corregir parámetros:\n\n{ex.Message}",
                     "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+            finally
+            {
+                // Rehabilitar botón
+                CorregirButton.IsEnabled = true;
             }
         }
 

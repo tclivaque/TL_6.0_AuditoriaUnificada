@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Windows;
@@ -8,6 +9,7 @@ using Autodesk.Revit.DB;
 using Autodesk.Revit.UI;
 using TL60_AuditoriaUnificada.Models;
 using TL60_AuditoriaUnificada.Plugins.COBie.Services;
+using TL60_AuditoriaUnificada.Services;
 
 namespace TL60_AuditoriaUnificada.Plugins.COBie.UI
 {
@@ -155,6 +157,29 @@ namespace TL60_AuditoriaUnificada.Plugins.COBie.UI
             }
             DiagnosticDataGrid.ItemsSource = null;
             DiagnosticDataGrid.ItemsSource = _diagnosticRows;
+        }
+
+        private void ExportarButton_Click(object sender, RoutedEventArgs e)
+        {
+            var dialog = new Microsoft.Win32.SaveFileDialog
+            {
+                FileName = $"Diagnostico_COBie_{DateTime.Now:yyyyMMdd_HHmm}.xlsx",
+                Filter = "Archivos de Excel (*.xlsx)|*.xlsx"
+            };
+
+            if (dialog.ShowDialog() == true)
+            {
+                try
+                {
+                    var exportService = new ExcelExportService();
+                    byte[] fileBytes = exportService.ExportToExcel(_diagnosticRows);
+                    File.WriteAllBytes(dialog.FileName, fileBytes);
+                }
+                catch (Exception ex)
+                {
+                    TaskDialog.Show("Error de Exportación", $"Error al exportar el archivo: {ex.Message}");
+                }
+            }
         }
     }
 }

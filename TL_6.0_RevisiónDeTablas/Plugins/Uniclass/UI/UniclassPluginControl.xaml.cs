@@ -3,12 +3,14 @@ using Autodesk.Revit.DB;
 using Autodesk.Revit.UI;
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using TL60_AuditoriaUnificada.Models;
 using TL60_AuditoriaUnificada.Plugins.Uniclass.Services;
+using TL60_AuditoriaUnificada.Services;
 
 namespace TL60_AuditoriaUnificada.Plugins.Uniclass.UI
 {
@@ -200,6 +202,30 @@ namespace TL60_AuditoriaUnificada.Plugins.Uniclass.UI
             {
                 // Rehabilitar botón
                 CorregirButton.IsEnabled = true;
+            }
+        }
+
+        private void ExportarButton_Click(object sender, RoutedEventArgs e)
+        {
+            var dialog = new Microsoft.Win32.SaveFileDialog
+            {
+                FileName = $"Diagnostico_Uniclass_{DateTime.Now:yyyyMMdd_HHmm}.xlsx",
+                Filter = "Archivos de Excel (*.xlsx)|*.xlsx"
+            };
+
+            if (dialog.ShowDialog() == true)
+            {
+                try
+                {
+                    var exportService = new ExcelExportService();
+                    var filasVisibles = DiagnosticDataGrid.ItemsSource as List<DiagnosticRow> ?? _todasLasFilas;
+                    byte[] fileBytes = exportService.ExportToExcel(filasVisibles.ToList());
+                    File.WriteAllBytes(dialog.FileName, fileBytes);
+                }
+                catch (Exception ex)
+                {
+                    TaskDialog.Show("Error de Exportación", $"Error al exportar el archivo: {ex.Message}");
+                }
             }
         }
 

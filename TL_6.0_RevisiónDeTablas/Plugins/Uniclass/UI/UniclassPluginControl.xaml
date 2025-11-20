@@ -160,6 +160,8 @@
         <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,15,0,0">
             <Button x:Name="CorregirButton" Content="Corregir" Width="120" Height="40" Margin="10,0" FontSize="14" FontWeight="SemiBold"
                     Background="#28A745" Foreground="White" BorderThickness="0" Cursor="Hand" Click="CorregirButton_Click">
+            <Button x:Name="ExportarButton" Content="Exportar a Excel" Width="150" Height="40" Margin="10,0" FontSize="14" FontWeight="SemiBold"
+                    Background="#007BFF" Foreground="White" BorderThickness="0" Cursor="Hand" Click="ExportarButton_Click">
                 <Button.Style>
                     <Style TargetType="Button">
                         <Setter Property="Template">
@@ -179,6 +181,27 @@
                                 <Setter Property="Background" Value="#BDC3C7"/>
                                 <Setter Property="Opacity" Value="0.7"/>
                                 <Setter Property="Cursor" Value="No"/>
+                            </Trigger>
+                        </Style.Triggers>
+                    </Style>
+                </Button.Style>
+            </Button>
+            <Button x:Name="ExportarButton" Content="Exportar a Excel" Width="150" Height="40" Margin="10,0" FontSize="14" FontWeight="SemiBold"
+                    Background="#007BFF" Foreground="White" BorderThickness="0" Cursor="Hand" Click="ExportarButton_Click">
+                <Button.Style>
+                    <Style TargetType="Button">
+                        <Setter Property="Template">
+                            <Setter.Value>
+                                <ControlTemplate TargetType="Button">
+                                    <Border Background="{TemplateBinding Background}" CornerRadius="5" Padding="10">
+                                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                    </Border>
+                                </ControlTemplate>
+                            </Setter.Value>
+                        </Setter>
+                        <Style.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter Property="Background" Value="#0056B3"/>
                             </Trigger>
                         </Style.Triggers>
                     </Style>

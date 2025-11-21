@@ -160,8 +160,6 @@
         <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,15,0,0">
             <Button x:Name="CorregirButton" Content="Corregir" Width="120" Height="40" Margin="10,0" FontSize="14" FontWeight="SemiBold"
                     Background="#28A745" Foreground="White" BorderThickness="0" Cursor="Hand" Click="CorregirButton_Click">
-            <Button x:Name="ExportarButton" Content="Exportar a Excel" Width="150" Height="40" Margin="10,0" FontSize="14" FontWeight="SemiBold"
-                    Background="#007BFF" Foreground="White" BorderThickness="0" Cursor="Hand" Click="ExportarButton_Click">
                 <Button.Style>
                     <Style TargetType="Button">
                         <Setter Property="Template">

@@ -158,7 +158,7 @@
             <Button x:Name="ExportarButton" 
                     Content="Exportar a Excel" 
                     Width="150" Height="40" Margin="10,0" FontSize="14" FontWeight="SemiBold"
-                    Background="#C8A2C8" Foreground="White" BorderThickness="0" Cursor="Hand"
+                    Background="#4E529C" Foreground="White" BorderThickness="0" Cursor="Hand"
                     Click="ExportarButton_Click">
                 <Button.Style>
                     <Style TargetType="Button">
@@ -182,7 +182,7 @@
             <Button x:Name="CorregirButton" 
                     Content="Corregir" 
                     Width="150" Height="40" Margin="10,0" FontSize="14" FontWeight="SemiBold"
-                    Background="#28A745" Foreground="White" BorderThickness="0" Cursor="Hand" 
+                    Background="#28A725" Foreground="White" BorderThickness="0" Cursor="Hand" 
                     Click="CorregirButton_Click">
                 <Button.Style>
                     <Style TargetType="Button">

@@ -185,7 +185,7 @@
                 </Button.Style>
             </Button>
             <Button x:Name="ExportarButton" Content="Exportar a Excel" Width="150" Height="40" Margin="10,0" FontSize="14" FontWeight="SemiBold"
-                    Background="#007BFF" Foreground="White" BorderThickness="0" Cursor="Hand" Click="ExportarButton_Click">
+                    Background="#4E529C" Foreground="White" BorderThickness="0" Cursor="Hand" Click="ExportarButton_Click">
                 <Button.Style>
                     <Style TargetType="Button">
                         <Setter Property="Template">
